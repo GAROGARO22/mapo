@@ -6,54 +6,94 @@
   <title>الخارطة | Map</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { height: 100%; background: #0f172a; font-family: "Segoe UI", Tahoma, Arial, sans-serif; }
-    header {
-      color: #e2e8f0;
-      text-align: center;
-      padding: 14px 10px;
-      background: #1e293b;
-      border-bottom: 1px solid #334155;
-    }
-    header h1 { font-size: 1.3rem; font-weight: 600; }
-    main {
-      height: calc(100vh - 56px); /* باقي الشاشة تحت الهيدر */
-      padding: 12px;
-    }
-    .map-frame {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 8px 30px rgba(0,0,0,.45);
-      background: #1e293b;
-    }
-    .map-frame iframe {
-      position: absolute;
-      inset: 0;
-      width: 100% !important;
-      height: 100% !important;
-      border: 0;
-    }
-    footer {
-      color: #64748b;
-      text-align: center;
-      padding: 12px;
-      font-size: .8rem;
-    }
+    body { font-family: "Segoe UI", Tahoma, sans-serif; background: #101418; color: #eee; height: 100vh; display: flex; flex-direction: column; }
+    header { padding: .6rem 1rem; background: #171c22; border-bottom: 1px solid #2a323c; display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
+    header h1 { font-size: 1.05rem; }
+    #status { font-size: .78rem; color: #8fd99a; }
+    nav { margin-inline-start: auto; display: flex; gap: .4rem; }
+    nav a { color: #cfe3ff; text-decoration: none; font-size: .85rem; padding: .3rem .7rem; border-radius: 8px; }
+    nav a.active, nav a:hover { background: #24303d; }
+    main { flex: 1; position: relative; }
+    iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+    .fallback { position: absolute; inset: 0; display: grid; place-content: center; gap: 1rem; justify-items: center; text-align: center; padding: 1rem; }
+    .fallback input { width: min(420px, 90vw); padding: .7rem; border-radius: 10px; border: 1px solid #3a4654; background: #101418; color: #fff; font-size: 1.1rem; text-align: center; letter-spacing: .4em; }
+    .fallback button { padding: .7rem 1.4rem; border: 0; border-radius: 10px; background: #2f81f7; color: #fff; font-size: 1rem; cursor: pointer; }
+    .fallback small { color: #8aa; line-height: 1.8; max-width: 520px; }
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
   <header>
     <h1>🗺️ الخارطة التفاعلية</h1>
+    <span id="status"></span>
+    <nav>
+      <a href="/" class="active">الخارطة</a>
+      <a href="/add">إضافة موقع</a>
+    </nav>
   </header>
 
   <main>
-    <div class="map-frame">
+    <!-- التضمين المطلوب -->
+    <div id="mapWrap">
       <iframe src="https://www.google.com/maps/d/embed?mid=1NZygQ5FhCvHG3ZH6Ddk3lbzAwnJum8M&ehbc=2E312F" width="640" height="480" allowfullscreen loading="lazy"></iframe>
+    </div>
+
+    <!-- واجهة إضافة المواقع (تظهر عند /add) -->
+    <div id="addWrap" class="fallback hidden">
+      <h2>➕ إضافة موقع جديد إلى الخارطة</h2>
+      <input id="code" inputmode="numeric" placeholder="رمز التحقق (4 أرقام)" maxlength="4" autocomplete="one-time-code" />
+      <button id="addBtn" onclick="addSite()">بدء الإضافة</button>
+      <small id="hint">الطريقة: افتح رابط <b>Add site</b> الذي سيظهر لك على جهازك الشخصي (المسجل عليه حساب Google مالك الخارطة)، انسخ الرمز الظاهر هنا، ثم اضغط "بدء الإضافة". ستُفتح نافذة تأكيد على جهازك وتُضاف النقطة تلقائياً إلى Google My Maps.</small>
     </div>
   </main>
 
-  <footer style="display:none">Powered by Vercel</footer>
+  <script>
+    const API = 'https://script.google.com/macros/s/AKfycbxFVsvwzNAoxT1PVkRh7ZVK0n8e_t9m8YgDoKEqmHz6ghQzoLDaXusl_vy3_CtHqWMG/exec';
+    const isAdd = location.pathname.startsWith('/add');
+    document.getElementById('mapWrap').classList.toggle('hidden', isAdd);
+    document.getElementById('addWrap').classList.toggle('hidden', !isAdd);
+    document.querySelectorAll('nav a').forEach(a =>
+      a.classList.toggle('active', a.getAttribute('href') === (isAdd ? '/add' : '/')));
+
+    async function api(action, params) {
+      const url = API + '?action=' + action + '&' + new URLSearchParams(params || {});
+      const r = await fetch(url);
+      return r.json();
+    }
+
+    if (!isAdd) {
+      api('status').then(s => {
+        document.getElementById('status').textContent = s.ok ? '✅ خدمة المواقع متصلة' : '';
+      }).catch(() => {});
+    } else {
+      api('pending').then(p => {
+        if (p.hasPending && p.code) {
+          document.getElementById('code').value = p.code;
+          document.getElementById('hint').innerHTML =
+            'الرمز الحالي جاهز ✅ — إذا كنت تفتح من جهازك الشخصي (عليه حساب Google المالك) يمكنك الانتقال مباشرة إلى رابط <b>Add site</b> والضغط هناك.';
+        }
+      }).catch(() => {});
+    }
+
+    async function addSite() {
+      const btn = document.getElementById('addBtn');
+      const code = document.getElementById('code').value.trim();
+      if (!/^\d{4}$/.test(code)) { alert('أدخل رمزاً مكوّناً من 4 أرقام'); return; }
+      btn.disabled = true; btn.textContent = 'جارٍ...';
+      try {
+        const res = await api('startAdd', { code });
+        if (res.ok) {
+          document.getElementById('hint').innerHTML =
+            '✅ تم قبول الطلب! فُتحت نافذة <b>Add site</b> — أكمل هناك (اسم الموقع + إحداثيات النقطة).';
+          window.open(res.url || ('https://script.google.com/macros/s/' +
+            'AKfycbxFVsvwzNAoxT1PVkRh7ZVK0n8e_t9m8YgDoKEqmHz6ghQzoLDaXusl_vy3_CtHqWMG' +
+            '/exec?page=add&code=' + code), '_blank');
+        } else {
+          alert(res.message || JSON.stringify(res));
+        }
+      } catch (e) { alert('تعذر الاتصال بالخدمة: ' + e); }
+      btn.disabled = false; btn.textContent = 'بدء الإضافة';
+    }
+  </script>
 </body>
 </html>

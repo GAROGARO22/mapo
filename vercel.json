@@ -1,6 +1,6 @@
 {
-  "version": 2,
+  "cleanUrls": true,
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!api\\.js).*)", "destination": "/index.html" }
   ]
 }
