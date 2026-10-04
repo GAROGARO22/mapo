@@ -15,18 +15,14 @@
       border-bottom: 1px solid #334155;
     }
     header h1 { font-size: 1.3rem; font-weight: 600; }
-    .map-wrap {
-      position: relative;
-      width: 100%;
-      max-width: 1200px;
-      margin: 20px auto;
-      padding: 0 12px;
+    main {
+      height: calc(100vh - 56px); /* باقي الشاشة تحت الهيدر */
+      padding: 12px;
     }
     .map-frame {
       position: relative;
       width: 100%;
-      /* نسبة أبعاد الخارطة */
-      padding-bottom: 62.5%;
+      height: 100%;
       border-radius: 12px;
       overflow: hidden;
       box-shadow: 0 8px 30px rgba(0,0,0,.45);
@@ -52,12 +48,12 @@
     <h1>🗺️ الخارطة التفاعلية</h1>
   </header>
 
-  <div class="map-wrap">
+  <main>
     <div class="map-frame">
       <iframe src="https://www.google.com/maps/d/embed?mid=1NZygQ5FhCvHG3ZH6Ddk3lbzAwnJum8M&ehbc=2E312F" width="640" height="480" allowfullscreen loading="lazy"></iframe>
     </div>
-  </div>
+  </main>
 
-  <footer>Powered by Vercel</footer>
+  <footer style="display:none">Powered by Vercel</footer>
 </body>
 </html>
