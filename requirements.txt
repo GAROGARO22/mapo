@@ -1,7 +1,0 @@
-psycopg2-binary
-lxml
-shapely
-python-dotenv
-# إضافات مقترحة للمراحل القادمة
-fastapi
-uvicorn
