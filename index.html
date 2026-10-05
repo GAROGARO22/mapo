@@ -47,6 +47,13 @@ select{background:var(--panel);color:var(--tx);border:1px solid var(--line);bord
 .leaflet-container{background:#0b0f14;font-family:Cairo,Tahoma,sans-serif}
 .leaflet-control-attribution{display:none!important}
 .leaflet-control-zoom a{background:var(--panel)!important;color:var(--tx)!important;border-color:var(--line)!important}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#121821f2!important;color:var(--tx)!important;
+  border:1px solid var(--line);box-shadow:0 8px 30px #000a;font-family:Cairo,Tahoma,sans-serif!important}
+.leaflet-popup-content{margin:10px 14px;font-size:13px;line-height:1.7}
+.leaflet-popup-content b{color:var(--acc)}
+.leaflet-popup-content .pl{color:var(--gold);font-size:11px;font-weight:700}
+.leaflet-popup-content a{color:var(--acc);text-decoration:none;word-break:break-all}
+.leaflet-popup-close-button{color:var(--mut)!important}
 .pin{border-radius:50%;border:2px solid #0b0f1480;box-shadow:0 0 0 1px #ffffff26,0 1px 4px #0009;transition:transform .12s}
 .pin:hover{transform:scale(1.6);z-index:9999}
 .mk-label{white-space:nowrap;font-size:10px;font-weight:700;color:#dbe7f2;text-shadow:0 1px 3px #000,0 0 6px #000;pointer-events:none}
@@ -61,12 +68,10 @@ select{background:var(--panel);color:var(--tx);border:1px solid var(--line);bord
 .res:hover{background:#1a2836}.res small{color:var(--mut)}
 #toast{position:fixed;inset-block-start:64px;left:50%;transform:translateX(-50%);z-index:1200;background:var(--panel);
   border:1px solid var(--line);padding:8px 16px;border-radius:12px;font-size:13px;display:none;backdrop-filter:blur(8px)}
-#lock{position:fixed;inset:0;z-index:2000;background:var(--bg);display:none;place-items:center;text-align:center;padding:24px}
-#lock .big{font-size:64px;font-weight:900;color:#1c2836}
 @media(max-width:640px){#layers{max-height:42vh;font-size:11px}.stat{display:none}}
 </style>
 </head>
-<body oncontextmenu="return false" oncopy="return false" oncut="return false" ondragstart="return false" onselectstart="return false">
+<body oncontextmenu="return false" oncopy="return false" oncut="return false" ondragstart="return false">
 <div id="top">
   <div class="logo">🗺️ <b>MAPZI</b></div>
   <span class="dot" id="statusdot"></span>
@@ -97,24 +102,22 @@ select{background:var(--panel);color:var(--tx);border:1px solid var(--line);bord
 </div>
 
 <div id="toast"></div>
-<div id="lock"><div><div class="big">404</div><p style="color:var(--mut)">هذه الصفحة غير متاحة هنا.</p></div></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 'use strict';
-/* ============ MAPZI — standalone viewer (no google maps embed) ============ */
-const MID='1NZygQ5FhCvHG3ZH6Ddk3lbzAwnJum8M';
+/* ============ MAPZI — standalone viewer (zero google maps embed) ============ */
 const DATA_API='/api/mapdata';           // live snapshot (server pulls KML hourly cron + on demand)
-const HISTORY_RAW='https://raw.githubusercontent.com/GAROGARO22/mapzi-archive/main/history.json';
+const HISTORY_API='/api/archive';        // same-origin proxy for archive history (no CORS exposure)
 const POLL_MS=5*60*1000;                 // frontend re-check every 5 min (cron refreshes server-side)
-let map,layerGroup,labelLayer,tiles;
-let DATA=null,layerOn={},showLabels=false,liveSig='',viewDay=null,histDays=[];
+let map,layerGroup,labelLayer;
+let DATA=null,layerOn={},showLabels=false,liveSig='',viewDay=null,histDays=[],markersById={};
+let lastRefreshAt=0,lastRefreshErr='';
 
-/* ---------- map init ---------- */
+/* ---------- map init (fully independent UI — Leaflet only) ---------- */
 map=L.map('map',{zoomControl:true,attributionControl:false,minZoom:3,maxZoom:17,
   doubleZoomWheel:false,zoomSnap:.25,wheelPxPerZoomLevel:90}).setView([15.7,46.9],6);
-tiles=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{opacity:.55}).addTo(map);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{opacity:.9}).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{opacity:.95}).addTo(map);
 layerGroup=L.layerGroup().addTo(map);
 labelLayer=L.layerGroup();
 
@@ -122,21 +125,45 @@ labelLayer=L.layerGroup();
 const $=id=>document.getElementById(id);
 function toast(t){$('toast').textContent=t;$('toast').style.display='block';clearTimeout(toast._t);toast._t=setTimeout(()=>$('toast').style.display='none',2600);}
 function setStatus(ok,t){$('statusdot').className='dot'+(ok?'':' off');$('statustxt').textContent=t;}
-function esc(s){return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function normAr(s){return String(s||'')
+  .replace(/[\u064B-\u0652\u0640]/g,'')            // harakat & tatweel
+  .replace(/[إأآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ؤ/g,'و').replace(/ئ/g,'ي').replace(/ة/g,'ه')
+  .toLowerCase();}
+function fmtDay(d){try{return new Date(d+'T00:00:00').toLocaleDateString('ar',{weekday:'long',day:'numeric',month:'long',year:'numeric'});}catch{return d;}}
+function fmtDateShort(iso){if(!iso)return '';try{return new Date(iso).toLocaleDateString('ar-YE',{day:'numeric',month:'short'});}catch{return '';}}
+
+/* ---------- popup content ---------- */
+function popupHtml(p){
+  const desc=(p.d||'').trim();
+  let descHtml='';
+  if(desc){
+    const urlRe=/(https?:\/\/[^\s]+)/g;let last=0,m2,out='';
+    while((m2=urlRe.exec(desc))){
+      out+=esc(desc.slice(last,m2.index))+`<a href="${esc(m2[0])}" target="_blank" rel="noopener noreferrer nofollow">🔗 الرابط</a> `;
+      last=m2.index+m2[0].length;
+    }
+    descHtml='<div>'+out+esc(desc.slice(last))+'</div>';
+  }
+  return `<b>${esc(p.n||'بدون اسم')}</b><br><span class="pl">${esc(p.l)}</span>`+
+    (p.dt?`<br><small style="color:#f5c542">📅 ${fmtDateShort(p.dt+'T00:00:00')}</small>`:'')+
+    (descHtml?`<hr style="border:0;border-top:1px solid #22303f;margin:6px 0">${descHtml}`:'');
+}
 
 /* ---------- render points ---------- */
-function pinIcon(c,size){const d=document.createElement('div');d.className='pin';d.style.cssText=`width:${size}px;height:${size}px;background:${c}`;
-  return L.divIcon({html:d.outerHTML,iconSize:[size,size],iconAnchor:[size/2,size/2],className:''});}
+function radiusFor(z){return z>=9?7:z>=7?5:4;}
 function render(pts){
-  layerGroup.clearLayers();labelLayer.clearLayers();
-  const zoom=map.getZoom();
-  const size=zoom>=9?12:zoom>=7?10:8;
+  layerGroup.clearLayers();labelLayer.clearLayers();markersById={};
+  const zoom=map.getZoom(),r=radiusFor(zoom);
   for(const p of pts){
     if(!layerOn[p.l])continue;
-    const m=L.circleMarker([p.la,p.lo],{radius:size/2+1,color:'#0b0f14',weight:1,fillColor:p.c||'#cfd8dc',fillOpacity:.95})
+    const m=L.circleMarker([p.la,p.lo],{radius:r,color:'#0b0f14',weight:1,fillColor:p.c||'#cfd8dc',fillOpacity:.95})
       .bindTooltip(`<b>${esc(p.n)}</b><br><small>${esc(p.l)}</small>${p.d?`<br><small>${esc(p.d.slice(0,140))}</small>`:''}`,
         {className:'tip',direction:'top',offset:[0,-8]});
+    m.bindPopup(popupHtml(p),{maxWidth:300,autoPan:true});
+    m._pid=p.id;
     m.addTo(layerGroup);
+    markersById[p.id]=m;
     if(showLabels&&(zoom>=8||pts.length<300)){
       L.marker([p.la,p.lo],{icon:L.divIcon({html:`<div class="mk-label">${esc((p.n||'').slice(0,24))}</div>`,
         className:'',iconSize:[0,0],iconAnchor:[-6,8]}),interactive:false}).addTo(labelLayer);
@@ -144,7 +171,11 @@ function render(pts){
   }
   if(showLabels&&!map.hasLayer(labelLayer))labelLayer.addTo(map);
   if(!showLabels&&map.hasLayer(labelLayer))map.removeLayer(labelLayer);
-  $('statustxt').textContent=`${pts.length} موقعاً · ${new Date().toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'})}`;
+  updateStat(pts.length);
+}
+function updateStat(n){
+  const t=new Date().toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'});
+  $('statustxt').textContent=`${n} موقعاً · ${t}`+(DATA&&DATA.pulledAt?` · آخر سحب ${fmtDateShort(DATA.pulledAt)}`:'');
 }
 function buildLayers(){
   const list=$('laylist');list.innerHTML='';
@@ -154,65 +185,96 @@ function buildLayers(){
     const row=document.createElement('label');row.className='layrow';
     const col=(DATA.points.find(p=>p.l===l)||{}).c||'#cfd8dc';
     row.innerHTML=`<input type="checkbox" ${layerOn[l]?'checked':''}><span class="swatch" style="background:${col}"></span><span>${esc(l)}</span><span class="cnt">${counts[l]||0}</span>`;
-    row.querySelector('input').addEventListener('change',e=>{layerOn[l]=e.target.checked;render(DATA.points);});
+    row.querySelector('input').addEventListener('change',e=>{layerOn[l]=e.target.checked;render(currentPts());});
     list.appendChild(row);
   }
 }
 
-
 /* ---------- date tags for time machine ---------- */
 const MON={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',sept:'09',oct:'10',nov:'11',dec:'12'};
-function tagDates(d){for(const p of (d.points||[])){if(p.dt)continue;const m=(p.n+' '+(p.d||'')).match(/\[?\s*(\d{1,2})\s*([A-Za-z]{3,4})/);if(m){const mo=MON[m[2].toLowerCase().slice(0,4)]||MON[m[2].toLowerCase().slice(0,3)];if(mo)p.dt=(m[1]>20?'2026-':'2026-')+mo+'-'+String(m[1]).padStart(2,'0');}}}
+function tagDates(d){
+  const yr=new Date().getFullYear();
+  for(const p of (d.points||[])){
+    if(p.dt)continue;
+    const hay=(p.n+' '+(p.d||'')).slice(0,80);
+    const m=hay.match(/\[?\s*(\d{1,2})\s*([A-Za-z]{3,4})/);
+    if(!m)continue;
+    const mo=MON[m[2].toLowerCase()]||MON[m[2].toLowerCase().slice(0,3)];
+    if(!mo)continue;
+    const day=parseInt(m[1],10);if(day<1||day>31)continue;
+    let iso=yr+'-'+mo+'-'+String(day).padStart(2,'0');
+    if(new Date(iso)>new Date())iso=(yr-1)+'-'+mo+'-'+String(day).padStart(2,'0'); // future tag → last year
+    p.dt=iso;
+  }
+}
+
+/* ---------- current view selection ---------- */
+function currentPts(){
+  if(!DATA)return [];
+  if(!viewDay||viewDay==='live')return DATA.points;
+  return DATA.points.filter(p=>!p.dt||p.dt<=viewDay);
+}
 
 /* ---------- data loading ---------- */
+async function fetchSnapshot(){
+  const r=await fetch(DATA_API+'?action=get&cb='+Date.now(),{cache:'no-store'});
+  if(!r.ok)throw 0;
+  const d=await r.json();
+  if(!(d&&d.points&&d.points.length))throw 0;
+  return d;
+}
 async function loadLive(refresh){
   try{
-    const r=await fetch(DATA_API+'?action=get&cb='+Date.now(),{cache:'no-store'});
-    if(!r.ok)throw 0;
-    const d=await r.json();
-    if(d&&d.points&&d.points.length){
-      DATA=d;liveSig=d.sig||'';tagDates(DATA);
-      if(!viewDay){buildLayers();render(DATA.points);}
-      setStatus(true,'مباشر ✓');
-      if(refresh)toast('تم تحديث البيانات');
-      return true;
-    }
-    throw 0;
+    const d=await fetchSnapshot();
+    DATA=d;liveSig=d.sig||'';tagDates(DATA);
+    if(!viewDay||viewDay==='live'){buildLayers();render(DATA.points);}
+    setStatus(true,'مباشر ✓');
+    if(refresh){lastRefreshAt=Date.now();lastRefreshErr='';toast('تم تحديث البيانات');}
+    return true;
   }catch{
-    setStatus(false,'تعذّر جلب البيانات — إعادة المحاولة…');
-    if(refresh)toast('فشل التحديث، سيُعاد المحاولة تلقائياً');
+    if(DATA)setStatus(false,'انقطاع الاتصال — عرض آخر نسخة محفوظة');
+    else setStatus(false,'تعذّر جلب البيانات — إعادة المحاولة…');
+    if(refresh){lastRefreshErr='fetch';toast('فشل التحديث، سيُعاد المحاولة تلقائياً');}
     return false;
   }
 }
-async function triggerRefresh(){ // ask server to pull fresh KML from original map
-  try{await fetch(DATA_API+'?action=refresh',{method:'POST'});}catch{}
+async function triggerRefresh(){ // ask server to pull fresh KML from original map (throttled)
+  if(Date.now()-lastRefreshAt<60*1000&&!lastRefreshErr)return false;
+  try{
+    const r=await fetch(DATA_API+'?action=refresh',{method:'POST'});
+    if(r.ok)lastRefreshAt=Date.now();else lastRefreshErr='post';
+    return r.ok;
+  }catch{lastRefreshErr='post';return false;}
 }
 
 /* ---------- time machine ---------- */
 async function loadHistory(){
   let h=null;
-  try{const r=await fetch(HISTORY_RAW+'?cb='+Date.now(),{cache:'no-store'});if(r.ok)h=await r.json();}catch{}
-  if(!h){try{const r=await fetch('/data/history.json',{cache:'force-cache'});if(r.ok)h=await r.json();}catch{}}
-  if(h){
-    histDays=Object.keys(h).sort();
-    const sel=$('daysel');sel.innerHTML='';
-    for(const d of histDays){const o=document.createElement('option');o.value=d;o.textContent=d+(d===today()?' (اليوم)':'');sel.appendChild(o);}
-  }
+  try{const r=await fetch(HISTORY_API+'?cb='+Date.now(),{cache:'no-store'});if(r.ok)h=await r.json();}catch{}
+  if(!h||!Object.keys(h).length){try{const r=await fetch('/data/history.json');if(r.ok)h=await r.json();}catch{}}
+  const days=new Set(histDays);
+  if(h&&typeof h==='object'){for(const k of Object.keys(h))if(/^\d{4}-\d{2}-\d{2}$/.test(k))days.add(k);}
+  if(DATA)for(const p of DATA.points)if(p.dt)days.add(p.dt);
+  days.add(today());
+  histDays=[...days].sort();
+  const sel=$('daysel');sel.innerHTML='';
+  for(const d of histDays){const o=document.createElement('option');o.value=d;o.textContent=fmtDay(d)+(d===today()?' (اليوم)':'');sel.appendChild(o);}
+  if(viewDay&&viewDay!=='live'&&[...sel.options].some(o=>o.value===viewDay))sel.value=viewDay;
 }
 function today(){return new Date().toISOString().slice(0,10);}
 function showDay(day){
   viewDay=day;
   $('daylabel').textContent=day==='live'?'':day;
   $('tLive').classList.toggle('on',day==='live');
+  const sel=$('daysel');if([...sel.options].some(o=>o.value===day))sel.value=day;
   if(day==='live'){render(DATA.points||[]);setStatus(true,'مباشر ✓');return;}
-  // historical: filter points by date tags found in names/descriptions ([dd MMM] patterns) & archive day count
-  const pts=(DATA.points||[]).filter(p=>!p.dt||p.dt<=day);
-  render(pts);setStatus(true,'عرض تاريخي: '+day);
+  const pts=currentPts();
+  render(pts);setStatus(true,'عرض تاريخي: '+fmtDay(day));
 }
 $('bTime').addEventListener('click',()=>{
   const tb=$('timebar');tb.classList.toggle('show');
   $('bTime').classList.toggle('on');
-  if(tb.classList.contains('show')&&!histDays.length)loadHistory();
+  if(tb.classList.contains('show'))loadHistory();
 });
 $('tLive').addEventListener('click',()=>showDay('live'));
 $('daysel').addEventListener('change',e=>showDay(e.target.value));
@@ -221,43 +283,53 @@ $('tNewer').addEventListener('click',()=>{const i=histDays.indexOf(viewDay);if(i
 
 /* ---------- UI toggles ---------- */
 $('bLayers').addEventListener('click',()=>{$('layers').hidden=!$('layers').hidden;$('bLayers').classList.toggle('on');});
-$('bLabels').addEventListener('click',()=>{showLabels=!showLabels;$('bLabels').classList.toggle('on');if(DATA)render(DATA.points);});
+$('bLabels').addEventListener('click',()=>{showLabels=!showLabels;$('bLabels').classList.toggle('on');if(DATA)render(currentPts());});
 $('bSearch').addEventListener('click',()=>{$('search').classList.toggle('show');$('bSearch').classList.toggle('on');if($('search').classList.contains('show'))$('q').focus();});
-$('q').addEventListener('input',e=>{
-  const q=e.target.value.trim();const res=$('results');res.innerHTML='';
+$('q').addEventListener('input',runSearch);
+function runSearch(){
+  const q=normAr($('q').value.trim());const res=$('results');res.innerHTML='';
   if(q.length<2||!DATA)return;
-  const hits=(viewDay&&viewDay!=='live'?DATA.points:DATA.points).filter(p=>(p.n+' '+p.l+' '+p.d).includes(q)).slice(0,40);
+  const hits=currentPts().filter(p=>normAr(p.n+' '+p.l+' '+(p.d||'')).includes(q)).slice(0,40);
   for(const p of hits){const el=document.createElement('div');el.className='res';
-    el.innerHTML=`<span class="swatch" style="background:${p.c};display:inline-block"></span> <b>${esc(p.n)}</b><br><small>${esc(p.l)} · ${p.la}, ${p.lo}</small>`;
-    el.addEventListener('click',()=>{map.setView([p.la,p.lo],10);p._m&&p._m.openTooltip&&p._m.openTooltip();});
+    el.innerHTML=`<span class="swatch" style="background:${esc(p.c||'#cfd8dc')};display:inline-block"></span> <b>${esc(p.n)}</b><br><small>${esc(p.l)} · ${p.la}, ${p.lo}</small>`;
+    el.addEventListener('click',()=>{
+      // zoom in first so the re-rendered marker exists at this id, then open its popup
+      map.setView([p.la,p.lo],Math.max(map.getZoom(),10));
+      const done=()=>{
+        const m=markersById[p.id];
+        if(m&&m.openPopup)m.openPopup();
+        else L.popup({maxWidth:300}).setLatLng([p.la,p.lo]).setContent(popupHtml(p)).openOn(map);
+      };
+      if(map.getZoom()===Math.max(map.getZoom(),10))done();else map.once('moveend',done);
+    });
     res.appendChild(el);}
   if(!hits.length)res.innerHTML='<div class="res">لا نتائج</div>';
+}
+$('bReload').addEventListener('click',async()=>{
+  toast('جارٍ سحب آخر نسخة من الخارطة الأصلية…');
+  await triggerRefresh();
+  await loadLive(true);
+  await loadHistory();
 });
-$('bReload').addEventListener('click',async()=>{toast('جارٍ سحب آخر نسخة من الخارطة الأصلية…');await triggerRefresh();await loadLive(true);await loadHistory();});
-map.on('zoomend',()=>{if(DATA&&!viewDay)render(DATA.points);});
+map.on('zoomend',()=>{if(DATA)render(currentPts());}); // re-render at all zoom levels so labels/sizes stay correct
 
-/* ---------- protection (view only) ---------- */
-document.addEventListener('keydown',e=>{
-  const k=e.key.toLowerCase();
-  if(e.key==='F12'||(e.ctrlKey&&['u','s','p','c','a'].includes(k))||(e.ctrlKey&&e.shiftKey&&['i','j','c'].includes(k))){e.preventDefault();location.href='/blocked';}
-},{capture:true});
+/* ---------- protection (best-effort deterrents only) ---------- */
 window.addEventListener('paste',e=>e.preventDefault());
 const openW=window.open;window.open=function(u){u=String(u||'');if(/google|mymaps|maps\.app/.test(u))return null;return openW.apply(window,arguments);};
-const iv=setInterval(()=>{if(innerWidth-outerWidth>170||innerHeight-outerHeight>170){$('lock').style.display='grid';}},1200);
-try{Object.defineProperty(navigator,'clipboard',{get:()=>({writeText:()=>Promise.reject(),write:()=>Promise.reject()})});}catch{}
 history.pushState(null,'',location.href);addEventListener('popstate',()=>history.pushState(null,'',location.href));
 
 /* ---------- boot + polling ---------- */
 (async function(){
   await loadLive(false);
   if(!DATA){ // bootstrap fallback bundled snapshot
-    try{const r=await fetch('/data/mapdata.json',{cache:'force-cache'});DATA=await r.json();tagDates(DATA);liveSig=DATA.sig||'';buildLayers();render(DATA.points);setStatus(true,'نسخة محلية مبدئية');}catch{setStatus(false,'لا توجد بيانات');}
+    try{const r=await fetch('/data/mapdata.json');DATA=await r.json();tagDates(DATA);liveSig=DATA.sig||'';buildLayers();render(DATA.points);setStatus(true,'نسخة محلية مبدئية');}catch{setStatus(false,'لا توجد بيانات');}
   }
   loadHistory();
   setInterval(async()=>{ // periodic check: compare sig with server snapshot
-    try{const r=await fetch(DATA_API+'?action=get&cb='+Date.now(),{cache:'no-store'});if(!r.ok)return;
-      const d=await r.json();
-      if(d&&d.points&&d.sig&&d.sig!==liveSig){toast('🔄 تحديث جديد على الخارطة — جارٍ العرض');DATA=d;liveSig=d.sig;tagDates(DATA);buildLayers();if(!viewDay||viewDay==='live')render(DATA.points);}
+    try{
+      const d=await fetchSnapshot();
+      if(d.sig&&d.sig!==liveSig){toast('🔄 تحديث جديد على الخارطة — جارٍ العرض');DATA=d;liveSig=d.sig;tagDates(DATA);buildLayers();if(!viewDay||viewDay==='live')render(DATA.points);}
+      else if(DATA){setStatus(true,'مباشر ✓');updateStat(currentPts().length);} // restore online indicator after transient failures
     }catch{}
   },POLL_MS);
   setTimeout(triggerRefresh,8000); // keep server snapshot fresh for visitors
