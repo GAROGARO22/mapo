@@ -29,6 +29,12 @@ header{position:fixed;top:0;left:0;right:0;height:56px;z-index:50;display:flex;a
 .btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
 #stage{position:fixed;top:56px;left:0;right:0;bottom:0;background:#0e1626}
 iframe#map{width:100%;height:100%;border:0;display:block;background:#0e1626}
+/* ====== إخفاء أزرار جوجل الأصلية (مشاركة / فتح في خرائط جوجل) ====== */
+/* الإطار مُكبَّر قليلاً مع إزاحة للأسفل حتى تخرج شريط الأدوات العلوي من منطقة الرؤية */
+.stage-zoom #mapWrap{position:absolute;inset:-48px 0 -56px 0}
+.stage-zoom #mapWrap iframe{width:100%;height:100%}
+/* حجب إضافي: طبقة قناع علوية لا تمرر النقر فوق موضع الشريط (~56px أعلى اليسار/اليمين حسب RTL) */
+#topGuard{position:absolute;top:0;left:0;right:0;height:60px;z-index:15;background:linear-gradient(180deg,var(--bg) 78%,transparent);pointer-events:auto}
 .overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:rgba(11,18,32,.72);z-index:20;backdrop-filter:blur(4px)}
 .overlay.show{display:flex}
 .spinner{width:44px;height:44px;border-radius:50%;border:4px solid var(--line);border-top-color:var(--acc);animation:spin 1s linear infinite}
@@ -76,8 +82,9 @@ iframe#map{width:100%;height:100%;border:0;display:block;background:#0e1626}
   <button class="btn primary" id="btnAdd">➕ إضافة موقع</button>
 </header>
 
-<div id="stage">
-  <iframe id="map" src="about:blank" title="الخارطة" allow="fullscreen" referrerpolicy="no-referrer"></iframe>
+<div id="stage" class="stage-zoom">
+  <div id="mapWrap"><iframe id="map" src="about:blank" title="الخارطة" allow="fullscreen" referrerpolicy="no-referrer"></iframe></div>
+  <div id="topGuard"></div>
   <div class="overlay show" id="loadOverlay"><div class="spinner"></div><p>جارٍ تحميل الخارطة…</p></div>
   <div class="overlay" id="syncOverlay"><div class="spinner"></div><p id="syncMsg">جارٍ المزامنة…</p></div>
   <div id="dateBanner"><span id="dateIcon">⏪</span><span id="dateTxt"></span>&nbsp;<button class="btn" id="btnBackLive" style="padding:4px 12px;font-size:12px">العودة للحاضر ●</button></div>
@@ -244,8 +251,62 @@ async function renderView(){
     banner.classList.remove('live');dic.textContent='⏪';
   }
   dtxt.textContent=label;banner.classList.add('show');
-  const f=$('#map');showLoad(true);f.onload=()=>showLoad(false);f.src=embedFor(day);
+  const f=$('#map');showLoad(true);
+  f.onload=async()=>{showLoad(false);await stripGChrome(f);};
+  f.src=embedFor(day);
   refreshDock();
+}
+
+/* ---- إزالة شريط أدوات جوجل (مشاركة / فتح في الخارطة الأصلية) من داخل الإطار ---- */
+/* يعمل لأن صفحة التضمين لا ترسل X-Frame-Options → نفس الأصل google.com → DOM متاح */
+const GCHROME_SELECTORS=[
+  'a[href*="/maps/d/edit"]','a[href*="g.co/kgm"]',
+  'button[aria-label*="Share" i]','a[aria-label*="Share" i]','div[role="button"][aria-label*="Share" i]',
+  '[jsaction*="share"]','[data-value="share"]',
+  'button[aria-label*="More options" i]','[jsaction*="moreMenu.menu.open"]','div.more-menu-button-container',
+  'a[href*="google.com/maps"]','a[aria-label*="Open in Google Maps" i]',
+  '.map-top-bar','widget-holder.share-button','.gm-style .gws-dynamic-header',
+  /* فئات مشغّل خرائط جوجل الفعلية (gmeviewer) — شريط المشاركة/الخيارات العلوي */
+  '.jQhVs-uMX1Ee-My5Dr-purZT-uDEFge',      /* حاوية زر المشاركة بأيقونته */
+  '.dIxMhd-bN97Pc-Tswv1b-Bz112c',          /* أيقونة "فتح في الخرائط" */
+  '.dIxMhd-bN97Pc-b3rLgd',                 /* كتلة الرابط الذي يفتح الخريطة الأصلية */
+  '.Te60Vd-ZMv3u.dIxMhd-bN97Pc-b3rLgd'     /* نفس الكتلة بصيغة قائمة */
+];
+function hideGChrome(doc){
+  if(!doc||!doc.body)return;
+  try{
+    // 1) إزالة العناصر المعروفة
+    GCHROME_SELECTORS.forEach(sel=>{try{doc.querySelectorAll(sel).forEach(el=>el.remove());}catch(e){}});
+    // 2) الشريط العلوي الكامل للـ viewer (يحتوي اسم الخريطة + الأزرار) — يُخفى إن وُجد فوق الخريطة
+    ['.top-right-controls-container','.drawio-widget-box-container'].forEach(()=>{});
+    const topBars=doc.querySelectorAll('[class*="header"],[class*="top-bar"],[class*="toolbar"]');
+    topBars.forEach(el=>{
+      try{
+        const r=el.getBoundingClientRect();
+        if(r.top>=0&&r.top<70&&(r.height>10&&r.height<80)&&r.width>60){el.style.display='none';}
+      }catch(e){}
+    });
+    // 3) أي رابط/زر نصه مشاركة أو Share
+    doc.querySelectorAll('a,button,[role="button"]').forEach(el=>{
+      try{
+        const t=(el.textContent||'').trim(),al=(el.getAttribute('aria-label')||'');
+        if(/^(مشاركة|Share)$/i.test(t)||/(مشاركة|Share)/i.test(al)){el.remove();return;}
+        const href=el.getAttribute('href')||'';
+        if(href.includes('/maps/d/edit')||href.includes('/maps/d/viewer'))el.remove();
+      }catch(e){}
+    });
+  }catch(e){}
+}
+function stripGChrome(frame){
+  let doc=null;try{doc=frame.contentDocument||frame.contentWindow.document;}catch(e){return;}
+  if(!doc)return;
+  hideGChrome(doc);
+  const obs=new MutationObserver(()=>hideGChrome(doc));
+  try{obs.observe(doc.documentElement,{childList:true,subtree:true});}catch(e){}
+  const iv=setInterval(()=>{
+    try{if(!document.body.contains(frame)){clearInterval(iv);obs.disconnect();return;}}catch(e){clearInterval(iv);return;}
+    hideGChrome(doc);
+  },800);
 }
 function refreshDock(){
   const dp=$('#datePicker');dp.min=daysCache[0]||dayKey();dp.max=dayKey();
