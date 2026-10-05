@@ -49,7 +49,7 @@
 
   <script>
     const API = 'https://script.google.com/macros/s/AKfycbxFVsvwzNAoxT1PVkRh7ZVK0n8e_t9m8YgDoKEqmHz6ghQzoLDaXusl_vy3_CtHqWMG/exec';
-    const isAdd = location.pathname.startsWith('/add');
+    const isAdd = location.pathname.startsWith('/add') || new URLSearchParams(location.search).has('add');
     document.getElementById('mapWrap').classList.toggle('hidden', isAdd);
     document.getElementById('addWrap').classList.toggle('hidden', !isAdd);
     document.querySelectorAll('nav a').forEach(a =>
