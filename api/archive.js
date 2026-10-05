@@ -1,86 +1,51 @@
-// MAPZI history archive proxy.
-// Stores history.json + suggestions in a PRIVATE GitHub repo (server-side token only).
+// MAPZI archive proxy — reads/writes history.json in the PRIVATE mapzi-archive repo.
 export const config = { runtime: 'edge' };
 
 const REPO = process.env.ARCHIVE_REPO || 'GAROGARO22/mapzi-archive';
-const TOKEN = process.env.GITHUB_TOKEN || ''; // Vercel-provided or user PAT secret
-const FILE = 'history.json';
-const SUGG = 'suggestions.jsonl';
-const GH = 'https://api.github.com/repos/' + REPO + '/contents/';
+const TOKEN = process.env.MAPZI_PAT || '';   // set as Vercel env var (same PAT)
+const FILE = 'history.json', SUGG = 'suggestions.json';
+const GH = `https://api.github.com/repos/${REPO}/contents/`;
 
-async function gh(path, init) {
-  const res = await fetch(GH + path, {
+async function gh(path, init = {}) {
+  return fetch(GH + path, {
     ...init,
-    headers: {
-      Authorization: 'Bearer ' + TOKEN,
-      Accept: 'application/vnd.github+json',
-      'Content-Type': 'application/json',
-      ...(init?.headers || {}),
-    },
+    headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json', ...(init.headers || {}) },
   });
-  return res;
 }
-
 async function readJson(name) {
-  const r = await gh(name + '?ref=main', { method: 'GET' });
+  const r = await gh(`${name}?ref=main`);
   if (!r.ok) return null;
-  const j = await r.json();
-  try { return JSON.parse(atob(j.content.replace(/\n/g, ''))); } catch { return null; }
+  try {
+    const j = await r.json();
+    return JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g, '')))));
+  } catch { return null; }
 }
-
 async function writeJson(name, data, msg) {
-  const cur = await gh(name + '?ref=main', { method: 'GET' });
+  const cur = await gh(`${name}?ref=main`);
   let sha = null;
-  if (cur.ok) sha = (await cur.json()).sha;
-  const body = {
-    message: msg,
-    content: btoa(unescape(encodeURIComponent(JSON.stringify(data)))),
-    branch: 'main',
-  };
+  if (cur.ok) { try { sha = (await cur.json()).sha; } catch {} }
+  const body = { message: msg, branch: 'main', content: btoa(unescape(encodeURIComponent(JSON.stringify(data)))) };
   if (sha) body.sha = sha;
-  const r = await gh(name, { method: sha ? 'PUT' : 'PUT', body: JSON.stringify(body) });
+  const r = await gh(name, { method: 'PUT', body: JSON.stringify(body) });
   return r.ok;
 }
 
-async function appendLine(name, line) {
-  // store jsonl inside a json array file for simplicity
-  const arr = (await readJson(name)) || [];
-  arr.push(line);
-  if (arr.length > 5000) arr.splice(0, arr.length - 5000);
-  return writeJson(name, arr, 'append suggestion');
-}
-
 export default async function handler(req) {
-  const cors = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Content-Type': 'application/json',
-  };
-  if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
-  if (!TOKEN) return new Response(JSON.stringify({ error: 'GITHUB_TOKEN not configured' }), { status: 500, headers: cors });
-
+  const cors = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' };
+  if (req.method === 'OPTIONS') return new Response(null, { headers: { ...cors, 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } });
+  if (!TOKEN) return new Response(JSON.stringify({ error: 'MAPZI_PAT not configured on Vercel' }), { status: 500, headers: cors });
   const url = new URL(req.url);
-  const action = url.searchParams.get('action') || 'get';
-
   try {
-    if (req.method === 'GET' && action === 'get') {
-      const hist = (await readJson(FILE)) || {};
-      return new Response(JSON.stringify(hist), { headers: cors });
-    }
+    if (req.method === 'GET') return new Response(JSON.stringify((await readJson(FILE)) || {}), { headers: cors });
     if (req.method === 'POST') {
-      const body = await req.json();
-      if (body.action === 'save') {
-        const ok = await writeJson(FILE, body.history || {}, 'sync history ' + new Date().toISOString());
-        return new Response(JSON.stringify({ ok }), { status: ok ? 200 : 502, headers: cors });
-      }
-      if (body.action === 'suggest') {
-        const ok = await appendLine(SUGG, JSON.stringify(body.payload));
+      const b = await req.json();
+      if (b.action === 'suggest') {
+        const arr = (await readJson(SUGG)) || [];
+        arr.push(b.payload); if (arr.length > 5000) arr.splice(0, arr.length - 5000);
+        const ok = await writeJson(SUGG, arr, 'new suggestion');
         return new Response(JSON.stringify({ ok }), { status: ok ? 200 : 502, headers: cors });
       }
     }
     return new Response(JSON.stringify({ error: 'bad request' }), { status: 400, headers: cors });
-  } catch (e) {
-    return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: cors });
-  }
+  } catch (e) { return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: cors }); }
 }
