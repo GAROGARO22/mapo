@@ -11,7 +11,7 @@ async function readJson(name) {
     const r = await fetch(GH + name + '?ref=main', { headers: { Authorization: 'Bearer ' + TOKEN, Accept: 'application/vnd.github+json' }, cache: 'no-store' });
     if (!r.ok) return null;
     const j = await r.json();
-    return JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g, '')))));
+    return JSON.parse(b64dec(j.content));
   } catch { return null; }
 }
 
@@ -65,13 +65,13 @@ function mergeHistory(stored, incoming) {
 
 export default async function handler(req) {
   const cors = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-  if (req.method === 'OPTIONS') return new Response(null, { headers: { ...cors, 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } });
+  if (req.method === 'OPTIONS') return new Response(null, { headers: { ...cors } });
   if (req.method === 'GET') {
     const hist = (await readJson('history.json')) || {};
-    return new Response(JSON.stringify(hist), { headers: { ...cors, 'Access-Control-Allow-Origin': '*' } });
+    return new Response(JSON.stringify(hist), { headers: { ...cors } });
   }
   if (req.method === 'POST') {
-    const corsPost = { ...cors, 'Access-Control-Allow-Origin': '*' };
+    const corsPost = { ...cors };
     let j = null;
     try { j = await req.json(); } catch {}
     if (j && j.action === 'save' && j.history) {

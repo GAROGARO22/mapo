@@ -84,8 +84,35 @@ function parseKml(xml) {
         else { const mm = /-([0-9a-fA-F]{8})-/.exec(su[1]); if (mm) color = hexFromAABBGGRR(mm[1].toLowerCase()); }
       }
       const name = nm ? nm[1].replace(/&amp;/g, '&').replace(/&#39;/g, "'").trim() : '';
-      points.push({ n: name.slice(0, 120), la: Math.round(lat * 1e5) / 1e5, lo: Math.round(lon * 1e5) / 1e5, l: lname, c: color, d: desc });
+      points.push({ id: points.length, n: name.slice(0, 120), la: Math.round(lat * 1e5) / 1e5, lo: Math.round(lon * 1e5) / 1e5, l: lname, c: color, d: desc });
     }
+  }
+  // placemarks outside any <Folder> (document level) — keep them too, dedupe by coords
+  const seen = new Set(points.map(p => Math.round(p.la * 1e5) + ',' + Math.round(p.lo * 1e5)));
+  for (const blk of xml.split('<Placemark>').slice(1)) {
+    const body = blk.split('</Placemark>')[0];
+    const co = /<Point>\s*<coordinates>([^<]+)<\/coordinates>/.exec(body);
+    if (!co) continue;
+    const parts = co[1].trim().split(',');
+    const lon = parseFloat(parts[0]), lat = parseFloat(parts[1]);
+    if (!isFinite(lat) || !isFinite(lon)) continue;
+    const key = Math.round(lat * 1e5) + ',' + Math.round(lon * 1e5);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const nm = /<name>([^<]*)<\/name>/.exec(body);
+    const su = /<styleUrl>#([^<]+)<\/styleUrl>/.exec(body);
+    const de = /<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/.exec(body);
+    let desc = de ? de[1] : '';
+    desc = desc.replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim().slice(0, 250);
+    let color = '#cfd8dc';
+    if (su) {
+      if (styleColor[su[1]]) color = styleColor[su[1]];
+      else { const mm = /-([0-9a-fA-F]{8})-/.exec(su[1]); if (mm) color = hexFromAABBGGRR(mm[1].toLowerCase()); }
+    }
+    const name = nm ? nm[1].replace(/&amp;/g, '&').replace(/&#39;/g, "'").trim() : '';
+    const lname = 'بدون طبقة';
+    if (!layers.includes(lname)) layers.push(lname);
+    points.push({ id: points.length, n: name.slice(0, 120), la: Math.round(lat * 1e5) / 1e5, lo: Math.round(lon * 1e5) / 1e5, l: lname, c: color, d: desc });
   }
   return { layers, points };
 }
