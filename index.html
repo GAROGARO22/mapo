@@ -1,371 +1,258 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
-<title>MAPZI | الخارطة الزمنية</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>MAPZI | الخارطة</title>
+<meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<link rel="preconnect" href="https://unpkg.com"><link rel="preconnect" href="https://tile.openstreetmap.org">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
-:root{
-  --bg:#0b1220; --panel:#131c2e; --panel2:#1a2540; --line:#26334f;
-  --txt:#e8eefc; --muted:#8ea0c4; --acc:#38bdf8; --acc2:#818cf8; --ok:#34d399; --warn:#fbbf24; --bad:#f87171;
-}
+:root{--bg:#0b0f14;--panel:#121821e6;--line:#22303f;--tx:#e8eef5;--mut:#8aa0b4;--acc:#38bdf8;--gold:#f5c542}
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%}
-body{font-family:'Cairo',system-ui,sans-serif;background:var(--bg);color:var(--txt);overflow:hidden;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-header{position:fixed;top:0;left:0;right:0;height:56px;z-index:50;display:flex;align-items:center;gap:10px;padding:0 14px;background:linear-gradient(180deg,rgba(11,18,32,.96),rgba(11,18,32,.85));border-bottom:1px solid var(--line);backdrop-filter:blur(10px)}
-.logo{display:flex;align-items:center;gap:8px;font-weight:900;font-size:20px}
-.logo .m{background:linear-gradient(135deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+html,body{height:100%;overflow:hidden}
+body{font-family:Cairo,Tahoma,sans-serif;background:var(--bg);color:var(--tx);
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#top{position:fixed;inset-block-start:0;inset-inline:0;z-index:1000;display:flex;align-items:center;gap:10px;
+  padding:10px 16px;background:linear-gradient(180deg,#0b0f14f2,#0b0f14d9 70%,transparent);pointer-events:none}
+#top>*{pointer-events:auto}
+.logo{display:flex;align-items:center;gap:8px;font-weight:900;font-size:19px;letter-spacing:.5px}
+.logo b{background:linear-gradient(135deg,var(--acc),#a78bfa);-webkit-background-clip:text;background-clip:text;color:transparent}
+.dot{width:9px;height:9px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e;animation:pulse 2s infinite}
+.dot.off{background:#ef4444;box-shadow:0 0 8px #ef4444;animation:none}
+@keyframes pulse{50%{opacity:.4}}
+.stat{font-size:12px;color:var(--mut)}
 .spacer{flex:1}
-.status{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);white-space:nowrap}
-.dot{width:9px;height:9px;border-radius:50%;background:var(--bad);transition:.3s}
-.dot.on{background:var(--ok)}
-.btn{appearance:none;border:1px solid var(--line);background:var(--panel2);color:var(--txt);font-family:inherit;font-weight:700;font-size:13px;padding:8px 14px;border-radius:10px;cursor:pointer;transition:.18s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-.btn:hover{border-color:var(--acc);transform:translateY(-1px)}
-.btn.primary{background:linear-gradient(135deg,var(--acc),var(--acc2));border:none;color:#06121f}
-.btn.icon{padding:8px 10px;font-size:16px}
-.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
-#stage{position:fixed;top:56px;left:0;right:0;bottom:0;background:#0e1626}
-iframe#map{width:100%;height:100%;border:0;display:block;background:#0e1626}
-/* ====== إخفاء أزرار جوجل الأصلية (مشاركة / فتح في خرائط جوجل) ====== */
-/* الإطار مُكبَّر قليلاً مع إزاحة للأسفل حتى تخرج شريط الأدوات العلوي من منطقة الرؤية */
-.stage-zoom #mapWrap{position:absolute;inset:-48px 0 -56px 0}
-.stage-zoom #mapWrap iframe{width:100%;height:100%}
-/* حجب إضافي: طبقة قناع علوية لا تمرر النقر فوق موضع الشريط (~56px أعلى اليسار/اليمين حسب RTL) */
-#topGuard{position:absolute;top:0;left:0;right:0;height:60px;z-index:15;background:linear-gradient(180deg,var(--bg) 78%,transparent);pointer-events:auto}
-.overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:rgba(11,18,32,.72);z-index:20;backdrop-filter:blur(4px)}
-.overlay.show{display:flex}
-.spinner{width:44px;height:44px;border-radius:50%;border:4px solid var(--line);border-top-color:var(--acc);animation:spin 1s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.overlay p{color:var(--muted);font-weight:600}
-#dateBanner{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:30;display:none;align-items:center;gap:10px;padding:9px 18px;border-radius:999px;background:rgba(251,191,36,.14);border:1px solid rgba(251,191,36,.5);color:var(--warn);font-weight:800;font-size:14px;box-shadow:0 6px 24px rgba(0,0,0,.4)}
-#dateBanner.live{background:rgba(52,211,153,.12);border-color:rgba(52,211,153,.45);color:var(--ok)}
-#dateBanner.show{display:flex}
-#dock{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:40;display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:16px;background:rgba(19,28,46,.92);border:1px solid var(--line);backdrop-filter:blur(12px);box-shadow:0 10px 40px rgba(0,0,0,.5);max-width:96vw;flex-wrap:wrap;justify-content:center}
-#dock .nav{font-size:18px;padding:8px 12px}
-#datePicker{font-family:inherit;font-weight:700;font-size:13px;color:var(--txt);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;cursor:pointer;color-scheme:dark}
-#snapCount{font-size:11px;color:var(--muted);padding:0 4px}
-.modal{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;background:rgba(4,8,16,.7);backdrop-filter:blur(6px);padding:16px}
-.modal.show{display:flex}
-.card{width:min(480px,100%);background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 24px 80px rgba(0,0,0,.6);position:relative}
-.card h2{font-size:19px;margin-bottom:4px}
-.card .sub{color:var(--muted);font-size:13px;margin-bottom:16px}
-.field{margin-bottom:13px}
-.field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px}
-.field input,.field textarea{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--txt);font-family:inherit;font-size:14px;padding:10px 12px;outline:none;transition:.15s}
-.field input:focus,.field textarea:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(56,189,248,.15)}
-.field textarea{resize:vertical;min-height:70px}
-.row{display:flex;gap:10px}.row .field{flex:1}
-.card .actions{display:flex;gap:10px;margin-top:18px}
-.card .actions .btn{flex:1;justify-content:center}
-.msg{font-size:13px;font-weight:700;margin-top:10px;min-height:18px}
-.msg.ok{color:var(--ok)}.msg.bad{color:var(--bad)}
-.closeX{position:absolute;top:12px;left:14px;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer}
-#decoy{position:fixed;inset:0;z-index:999;display:none;background:#fff;color:#202124;font-family:Arial,sans-serif;text-align:center;padding-top:18vh}
-#decoy.show{display:block}
-#decoy h1{font-size:26px;font-weight:400;margin-bottom:12px}
-#decoy p{font-size:14px;color:#5f6368}
-#toast{position:fixed;top:70px;left:50%;transform:translateX(-50%) translateY(-16px);z-index:70;background:var(--panel2);border:1px solid var(--acc);color:var(--txt);padding:10px 18px;border-radius:12px;font-weight:700;font-size:13px;opacity:0;pointer-events:none;transition:.3s;box-shadow:0 8px 30px rgba(0,0,0,.5)}
-#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-@media (max-width:640px){header{padding:0 8px;gap:6px}.logo{font-size:16px}.status span.lbl{display:none}.btn{padding:7px 10px;font-size:12px}#dock{bottom:10px;gap:6px;padding:8px}}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--tx);border-radius:10px;padding:7px 13px;
+  font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;backdrop-filter:blur(8px);transition:.2s}
+.btn:hover{border-color:var(--acc);color:var(--acc)}
+.btn.on{background:var(--acc);color:#04121e;border-color:var(--acc)}
+.btn.gold{border-color:var(--gold);color:var(--gold)}
+.btn.gold.on{background:var(--gold);color:#1d1500}
+#timebar{position:fixed;inset-block-end:0;inset-inline:0;z-index:1000;display:none;align-items:center;justify-content:center;gap:8px;
+  padding:10px;background:linear-gradient(0deg,#0b0f14f2,#0b0f14cc 75%,transparent)}
+#timebar.show{display:flex}
+#daylabel{font-size:13px;font-weight:700;color:var(--gold);min-width:110px;text-align:center}
+select{background:var(--panel);color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:7px 10px;font-family:inherit;font-size:13px}
+#layers{position:fixed;inset-block-start:62px;inset-inline-start:12px;z-index:900;background:var(--panel);
+  border:1px solid var(--line);border-radius:14px;padding:12px;backdrop-filter:blur(10px);max-height:60vh;overflow:auto;width:min(260px,70vw)}
+#layers h4{font-size:12px;color:var(--mut);margin-bottom:8px;font-weight:700}
+.layrow{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:4px 2px;cursor:pointer}
+.layrow input{accent-color:var(--acc)}
+.swatch{width:10px;height:10px;border-radius:50%;flex:none}
+.layrow .cnt{margin-inline-start:auto;color:var(--mut);font-size:11px}
+#map{position:fixed;inset:0;background:#0b0f14}
+.leaflet-container{background:#0b0f14;font-family:Cairo,Tahoma,sans-serif}
+.leaflet-control-attribution{display:none!important}
+.leaflet-control-zoom a{background:var(--panel)!important;color:var(--tx)!important;border-color:var(--line)!important}
+.pin{border-radius:50%;border:2px solid #0b0f1480;box-shadow:0 0 0 1px #ffffff26,0 1px 4px #0009;transition:transform .12s}
+.pin:hover{transform:scale(1.6);z-index:9999}
+.mk-label{white-space:nowrap;font-size:10px;font-weight:700;color:#dbe7f2;text-shadow:0 1px 3px #000,0 0 6px #000;pointer-events:none}
+.tip{background:#121821f0!important;border:1px solid var(--line)!important;color:var(--tx)!important;border-radius:10px!important;
+  box-shadow:0 8px 30px #000a;font-family:Cairo!important}
+.tip b{color:var(--acc)} .tip small{color:var(--mut)}
+#search{position:fixed;inset-block-start:62px;inset-inline-end:12px;z-index:900;display:none;flex-direction:column;gap:6px;width:min(300px,80vw)}
+#search.show{display:flex}
+#search input{background:var(--panel);border:1px solid var(--line);color:var(--tx);border-radius:10px;padding:9px 12px;font-family:inherit;font-size:13px;outline:none}
+#results{background:var(--panel);border:1px solid var(--line);border-radius:10px;max-height:38vh;overflow:auto;backdrop-filter:blur(10px)}
+.res{padding:8px 12px;font-size:12.5px;cursor:pointer;border-block-end:1px solid #1a2432}
+.res:hover{background:#1a2836}.res small{color:var(--mut)}
+#toast{position:fixed;inset-block-start:64px;left:50%;transform:translateX(-50%);z-index:1200;background:var(--panel);
+  border:1px solid var(--line);padding:8px 16px;border-radius:12px;font-size:13px;display:none;backdrop-filter:blur(8px)}
+#lock{position:fixed;inset:0;z-index:2000;background:var(--bg);display:none;place-items:center;text-align:center;padding:24px}
+#lock .big{font-size:64px;font-weight:900;color:#1c2836}
+@media(max-width:640px){#layers{max-height:42vh;font-size:11px}.stat{display:none}}
 </style>
 </head>
-<body>
-
-<header>
-  <div class="logo"><span>🗺️</span><span class="m">MAPZI</span></div>
+<body oncontextmenu="return false" oncopy="return false" oncut="return false" ondragstart="return false" onselectstart="return false">
+<div id="top">
+  <div class="logo">🗺️ <b>MAPZI</b></div>
+  <span class="dot" id="statusdot"></span>
+  <span class="stat" id="statustxt">جارٍ التحميل…</span>
   <div class="spacer"></div>
-  <div class="status"><span class="dot" id="netDot"></span><span class="lbl" id="histLbl">…</span></div>
-  <button class="btn icon" id="btnRefresh" title="تحديث الآن">⟳</button>
-  <button class="btn primary" id="btnAdd">➕ إضافة موقع</button>
-</header>
-
-<div id="stage" class="stage-zoom">
-  <div id="mapWrap"><iframe id="map" src="about:blank" title="الخارطة" allow="fullscreen" referrerpolicy="no-referrer"></iframe></div>
-  <div id="topGuard"></div>
-  <div class="overlay show" id="loadOverlay"><div class="spinner"></div><p>جارٍ تحميل الخارطة…</p></div>
-  <div class="overlay" id="syncOverlay"><div class="spinner"></div><p id="syncMsg">جارٍ المزامنة…</p></div>
-  <div id="dateBanner"><span id="dateIcon">⏪</span><span id="dateTxt"></span>&nbsp;<button class="btn" id="btnBackLive" style="padding:4px 12px;font-size:12px">العودة للحاضر ●</button></div>
+  <button class="btn" id="bSearch">🔍 بحث</button>
+  <button class="btn" id="bLabels">A− التسميات</button>
+  <button class="btn" id="bLayers">☰ الطبقات</button>
+  <button class="btn gold" id="bTime">⏳ آلة الزمن</button>
+  <button class="btn" id="bReload">⟳ تحديث</button>
 </div>
 
-<div id="dock">
-  <button class="btn nav" id="btnOlder" title="يوم أقدم">⏮</button>
-  <input type="date" id="datePicker" title="اختر يوماً">
-  <button class="btn nav" id="btnNewer" title="يوم أحدث">⏭</button>
-  <span id="snapCount"></span>
-  <button class="btn" id="btnToday">اليوم ●</button>
+<div id="map"></div>
+
+<div id="layers" hidden><h4>الطبقات</h4><div id="laylist"></div></div>
+
+<div id="search">
+  <input id="q" placeholder="ابحث عن موقع أو حدث…" autocomplete="off">
+  <div id="results"></div>
 </div>
 
-<div class="modal" id="addModal">
-  <div class="card">
-    <button class="closeX" data-close="addModal">✕</button>
-    <h2>➕ اقتراح موقع جديد</h2>
-    <p class="sub">يقترح الزائر موقعه، ويظهر على الخارطة بعد اعتماده من الإدارة.</p>
-    <div class="field"><label>اسم المكان *</label><input id="fName" maxlength="80" placeholder="مثال: حديقة السلام"></div>
-    <div class="row">
-      <div class="field"><label>خط العرض *</label><input id="fLat" inputmode="decimal" placeholder="33.5138"></div>
-      <div class="field"><label>خط الطول *</label><input id="fLng" inputmode="decimal" placeholder="36.2765"></div>
-    </div>
-    <div class="field"><label>ملاحظة (اختياري)</label><textarea id="fNote" maxlength="300" placeholder="وصف مختصر…"></textarea></div>
-    <div class="actions">
-      <button class="btn" data-close="addModal">إلغاء</button>
-      <button class="btn primary" id="btnSend">إرسال الاقتراح</button>
-    </div>
-    <div class="msg" id="addMsg"></div>
-  </div>
+<div id="timebar">
+  <button class="btn" id="tOlder">⏮ الأقدم</button>
+  <select id="daysel"></select>
+  <span id="daylabel">—</span>
+  <button class="btn" id="tNewer">الأحدث ⏭</button>
+  <button class="btn on" id="tLive">اليوم ● LIVE</button>
 </div>
 
-<div id="decoy"><h1>404. <span style="color:#5f6368">That’s an error.</span></h1><p>The requested URL was not found on this server. That’s all we know.</p></div>
 <div id="toast"></div>
+<div id="lock"><div><div class="big">404</div><p style="color:var(--mut)">هذه الصفحة غير متاحة هنا.</p></div></div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 'use strict';
-/* ===== MAPZI Time-Machine =====
-   1) Background pull of map data every POLL_MS
-   2) Daily rollup file per date in IndexedDB history
-   3) UI shows latest saved snapshot by default
-   4) Time-machine dock to navigate past days
-*/
-/* ▼ معرّف الطبقة المستخرج من رابط الخارطة الأصلي ▼ */
-const MID='1NZygQ5FhCvHG3ZH6Ddk3lbzAwnJum8M', EHBC='2E312F';
-const EMBED_URL=`https://www.google.com/maps/d/embed?mid=${MID}&ehbc=${EHBC}`;
-const KML_URL=`https://www.google.com/maps/d/kml?mid=${MID}&forcekml=1`;
-const ARCHIVE_REPO='mapzi-archive';        // private GitHub repo holding history.json
-const ARCHIVE_API='/api/archive';          // serverless proxy (vercel rewrite -> functions)
-const ARCHIVE_TOKEN_HINT='Archive token is stored server-side (env GITHUB_TOKEN). Visitors never see it.';
-const POLL_MS=60*1000;                     // <- 1 minute background pull (change freely)
-const SNAP_DB='mapzi_history_v1', SNAP_STORE='days';
+/* ============ MAPZI — standalone viewer (no google maps embed) ============ */
+const MID='1NZygQ5FhCvHG3ZH6Ddk3lbzAwnJum8M';
+const DATA_API='/api/mapdata';           // live snapshot (server pulls KML hourly cron + on demand)
+const HISTORY_RAW='https://raw.githubusercontent.com/GAROGARO22/mapzi-archive/main/history.json';
+const POLL_MS=5*60*1000;                 // frontend re-check every 5 min (cron refreshes server-side)
+let map,layerGroup,labelLayer,tiles;
+let DATA=null,layerOn={},showLabels=false,liveSig='',viewDay=null,histDays=[];
 
-const $=s=>document.querySelector(s);
-const dayKey=(d=new Date())=>d.toLocaleDateString('en-CA');
-function toast(t){const el=$('#toast');el.textContent=t;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2600);}
+/* ---------- map init ---------- */
+map=L.map('map',{zoomControl:true,attributionControl:false,minZoom:3,maxZoom:17,
+  doubleZoomWheel:false,zoomSnap:.25,wheelPxPerZoomLevel:90}).setView([15.7,46.9],6);
+tiles=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{opacity:.55}).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{opacity:.9}).addTo(map);
+layerGroup=L.layerGroup().addTo(map);
+labelLayer=L.layerGroup();
 
-/* ---------- local IndexedDB mirror ---------- */
-let dbP=null;
-function openDB(){if(dbP)return dbP;dbP=new Promise((res,rej)=>{const r=indexedDB.open(SNAP_DB,1);r.onupgradeneeded=e=>e.target.result.createObjectStore(SNAP_STORE);r.onsuccess=e=>res(e.target.result);r.onerror=e=>rej(e.error);});return dbP;}
-async function idbGet(k){const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(SNAP_STORE).objectStore(SNAP_STORE).get(k);t.onsuccess=()=>res(t.result||null);t.onerror=()=>rej(t.error);});}
-async function idbPut(k,v){const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(SNAP_STORE,'readwrite').objectStore(SNAP_STORE).put(v,k);t.onsuccess=()=>res();t.onerror=()=>rej(t.error);});}
-async function idbKeys(){const db=await openDB();return new Promise((res,rej)=>{const rq=db.transaction(SNAP_STORE).objectStore(SNAP_STORE).getAllKeys();rq.onsuccess=()=>res(rq.result||[]);rq.onerror=()=>rej(rq.error);});}
+/* ---------- helpers ---------- */
+const $=id=>document.getElementById(id);
+function toast(t){$('toast').textContent=t;$('toast').style.display='block';clearTimeout(toast._t);toast._t=setTimeout(()=>$('toast').style.display='none',2600);}
+function setStatus(ok,t){$('statusdot').className='dot'+(ok?'':' off');$('statustxt').textContent=t;}
+function esc(s){return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
-/* ---------- shared history model ----------
-   history = { "YYYY-MM-DD": { updates:[{t,sig}], latest:sig } }
-   Stored centrally as history.json in the private archive repo, mirrored locally. */
-let HISTORY={};
-async function loadHistory(){
-  try{
-    const r=await fetch(ARCHIVE_API+'?action=get&_='+Date.now(),{cache:'no-store'});
-    if(r.ok){HISTORY=await r.json()||{};}
-  }catch(e){ /* offline: fall back to local mirror */ }
-  for(const k of Object.keys(HISTORY)){ await idbPut(k,HISTORY[k]); }
-}
-async function saveHistory(){
-  await loadLocalAll();
-  try{
-    await fetch(ARCHIVE_API,{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',
-      body:JSON.stringify({action:'save',history:HISTORY})});
-  }catch(e){ /* keep local mirror authoritative until next sync */ }
-}
-async function loadLocalAll(){
-  const keys=(await idbKeys()).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
-  for(const k of keys){ const v=await idbGet(k); if(v) HISTORY[k]=v; }
-  return keys;
-}
-
-/* ---------- record a change ---------- */
-async function recordChange(sig,when=new Date()){
-  const k=dayKey(when);
-  const day=HISTORY[k]||(HISTORY[k]={updates:[],latest:null});
-  if(day.latest!==sig){
-    day.updates.push({t:when.toISOString(),sig});
-    if(day.updates.length>1000)day.updates.splice(0,day.updates.length-1000);
-    day.latest=sig;
-    await idbPut(k,day);
-    await saveHistory();       // 2) daily file updated end-of-run
-    return true;
-  }
-  return false;
-}
-
-/* ---------- 1) background pull ---------- */
-async function hashStr(s){
-  if(crypto&&crypto.subtle){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('').slice(0,16);}
-  let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return 'fnv'+h.toString(16);
-}
-async function fetchMapSignature(){
-  // Prefer KML export (structured place list) -> best change detection
-  try{
-    const r=await fetch(KML_URL+'&_=' + Date.now(),{cache:'no-store'});
-    if(r.ok){
-      const t=await r.text();
-      const names=[...t.matchAll(/<name>([^<]{1,120})<\/name>/g)].map(m=>m[1]).sort().join(';');
-      const pts=[...t.matchAll(/<coordinates>([^<]+)<\/coordinates>/g)].map(m=>m[1].trim()).sort().join('|');
-      if(names||pts) return {sig:await hashStr(names+'##'+pts),count:(names.split(';').filter(Boolean).length)||0};
+/* ---------- render points ---------- */
+function pinIcon(c,size){const d=document.createElement('div');d.className='pin';d.style.cssText=`width:${size}px;height:${size}px;background:${c}`;
+  return L.divIcon({html:d.outerHTML,iconSize:[size,size],iconAnchor:[size/2,size/2],className:''});}
+function render(pts){
+  layerGroup.clearLayers();labelLayer.clearLayers();
+  const zoom=map.getZoom();
+  const size=zoom>=9?12:zoom>=7?10:8;
+  for(const p of pts){
+    if(!layerOn[p.l])continue;
+    const m=L.circleMarker([p.la,p.lo],{radius:size/2+1,color:'#0b0f14',weight:1,fillColor:p.c||'#cfd8dc',fillOpacity:.95})
+      .bindTooltip(`<b>${esc(p.n)}</b><br><small>${esc(p.l)}</small>${p.d?`<br><small>${esc(p.d.slice(0,140))}</small>`:''}`,
+        {className:'tip',direction:'top',offset:[0,-8]});
+    m.addTo(layerGroup);
+    if(showLabels&&(zoom>=8||pts.length<300)){
+      L.marker([p.la,p.lo],{icon:L.divIcon({html:`<div class="mk-label">${esc((p.n||'').slice(0,24))}</div>`,
+        className:'',iconSize:[0,0],iconAnchor:[-6,8]}),interactive:false}).addTo(labelLayer);
     }
-  }catch(e){}
-  // Fallback: embed page fingerprint
-  try{
-    const r=await fetch(EMBED_URL+'&_='+Date.now(),{cache:'no-store'});
-    if(r.ok){const t=await r.text();const pl=[...t.matchAll(/"title":"([^"]{1,120})"/g)].map(m=>m[1]).sort().join(';');if(pl)return{sig:await hashStr(pl),count:pl.split(';').filter(Boolean).length};}
-  }catch(e){}
-  return {sig:null,count:0};
-}
-let busy=false,pollTimer=null;
-async function pollOnce(manual){
-  if(busy)return;busy=true;
-  try{
-    const {sig,count}=await fetchMapSignature();
-    if(sig){
-      const changed=await recordChange(sig);
-      if(changed){ if(viewDate===null)renderView(); if(manual)toast('✔ تغيير جديد تم التقاطه ('+count+' مكاناً)'); }
-      else if(manual)toast('لا تغييرات جديدة');
-      $('#histLbl').textContent='آخر مزامنة '+new Date().toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'});
-    }else if(manual){toast('تعذّر قراءة الخارطة — سنعيد المحاولة تلقائياً');}
-  }finally{busy=false;}
-}
-function startPolling(){stopPolling();pollOnce(false);pollTimer=setInterval(()=>pollOnce(false),POLL_MS);}
-function stopPolling(){if(pollTimer){clearInterval(pollTimer);pollTimer=null;}}
-
-/* ---------- viewer state & rendering ---------- */
-let viewDate=null,daysCache=[];
-function embedFor(dayObj){
-  // live embed always reflects CURRENT original map; for historical days we pass the
-  // recorded signature so the banner + archive tell the story, and when an archived
-  // copy exists (archivedEmbed url) we render THAT instead.
-  if(dayObj&&dayObj.archivedEmbed)return dayObj.archivedEmbed;
-  return EMBED_URL+(dayObj?'&sig='+String(dayObj.latest||'').slice(0,8):'')+'&_='+Date.now();
-}
-function showLoad(on){$('#loadOverlay').classList.toggle('show',!!on);}
-async function renderView(){
-  const banner=$('#dateBanner'),dtxt=$('#dateTxt'),dic=$('#dateIcon');
-  let day=null,label='';
-  if(viewDate===null){
-    const k=(await loadLocalAll()).slice(-1)[0]||dayKey();
-    day=HISTORY[k];
-    label='مباشر — آخر نسخة محفوظة: '+k+((day&&day.updates)?' • '+day.updates.length+' تحديث':'');
-    banner.classList.add('live');dic.textContent='●';
-  }else{
-    day=HISTORY[viewDate];
-    label='عرض تاريخي ليوم: '+viewDate+(day?(' • '+(day.updates||[]).length+' تحديث'):' • لا سجل لهذا اليوم');
-    banner.classList.remove('live');dic.textContent='⏪';
   }
-  dtxt.textContent=label;banner.classList.add('show');
-  const f=$('#map');showLoad(true);
-  f.onload=async()=>{showLoad(false);await stripGChrome(f);};
-  f.src=embedFor(day);
-  refreshDock();
+  if(showLabels&&!map.hasLayer(labelLayer))labelLayer.addTo(map);
+  if(!showLabels&&map.hasLayer(labelLayer))map.removeLayer(labelLayer);
+  $('statustxt').textContent=`${pts.length} موقعاً · ${new Date().toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'})}`;
+}
+function buildLayers(){
+  const list=$('laylist');list.innerHTML='';
+  const counts={};for(const p of DATA.points)counts[p.l]=(counts[p.l]||0)+1;
+  for(const l of DATA.layers){
+    if(!(l in layerOn))layerOn[l]=true;
+    const row=document.createElement('label');row.className='layrow';
+    const col=(DATA.points.find(p=>p.l===l)||{}).c||'#cfd8dc';
+    row.innerHTML=`<input type="checkbox" ${layerOn[l]?'checked':''}><span class="swatch" style="background:${col}"></span><span>${esc(l)}</span><span class="cnt">${counts[l]||0}</span>`;
+    row.querySelector('input').addEventListener('change',e=>{layerOn[l]=e.target.checked;render(DATA.points);});
+    list.appendChild(row);
+  }
 }
 
-/* ---- إزالة شريط أدوات جوجل (مشاركة / فتح في الخارطة الأصلية) من داخل الإطار ---- */
-/* يعمل لأن صفحة التضمين لا ترسل X-Frame-Options → نفس الأصل google.com → DOM متاح */
-const GCHROME_SELECTORS=[
-  'a[href*="/maps/d/edit"]','a[href*="g.co/kgm"]',
-  'button[aria-label*="Share" i]','a[aria-label*="Share" i]','div[role="button"][aria-label*="Share" i]',
-  '[jsaction*="share"]','[data-value="share"]',
-  'button[aria-label*="More options" i]','[jsaction*="moreMenu.menu.open"]','div.more-menu-button-container',
-  'a[href*="google.com/maps"]','a[aria-label*="Open in Google Maps" i]',
-  '.map-top-bar','widget-holder.share-button','.gm-style .gws-dynamic-header',
-  /* فئات مشغّل خرائط جوجل الفعلية (gmeviewer) — شريط المشاركة/الخيارات العلوي */
-  '.jQhVs-uMX1Ee-My5Dr-purZT-uDEFge',      /* حاوية زر المشاركة بأيقونته */
-  '.dIxMhd-bN97Pc-Tswv1b-Bz112c',          /* أيقونة "فتح في الخرائط" */
-  '.dIxMhd-bN97Pc-b3rLgd',                 /* كتلة الرابط الذي يفتح الخريطة الأصلية */
-  '.Te60Vd-ZMv3u.dIxMhd-bN97Pc-b3rLgd'     /* نفس الكتلة بصيغة قائمة */
-];
-function hideGChrome(doc){
-  if(!doc||!doc.body)return;
+/* ---------- data loading ---------- */
+async function loadLive(refresh){
   try{
-    // 1) إزالة العناصر المعروفة
-    GCHROME_SELECTORS.forEach(sel=>{try{doc.querySelectorAll(sel).forEach(el=>el.remove());}catch(e){}});
-    // 2) الشريط العلوي الكامل للـ viewer (يحتوي اسم الخريطة + الأزرار) — يُخفى إن وُجد فوق الخريطة
-    ['.top-right-controls-container','.drawio-widget-box-container'].forEach(()=>{});
-    const topBars=doc.querySelectorAll('[class*="header"],[class*="top-bar"],[class*="toolbar"]');
-    topBars.forEach(el=>{
-      try{
-        const r=el.getBoundingClientRect();
-        if(r.top>=0&&r.top<70&&(r.height>10&&r.height<80)&&r.width>60){el.style.display='none';}
-      }catch(e){}
-    });
-    // 3) أي رابط/زر نصه مشاركة أو Share
-    doc.querySelectorAll('a,button,[role="button"]').forEach(el=>{
-      try{
-        const t=(el.textContent||'').trim(),al=(el.getAttribute('aria-label')||'');
-        if(/^(مشاركة|Share)$/i.test(t)||/(مشاركة|Share)/i.test(al)){el.remove();return;}
-        const href=el.getAttribute('href')||'';
-        if(href.includes('/maps/d/edit')||href.includes('/maps/d/viewer'))el.remove();
-      }catch(e){}
-    });
-  }catch(e){}
+    const r=await fetch(DATA_API+'?action=get&cb='+Date.now(),{cache:'no-store'});
+    if(!r.ok)throw 0;
+    const d=await r.json();
+    if(d&&d.points&&d.points.length){
+      DATA=d;liveSig=d.sig||'';
+      if(!viewDay){buildLayers();render(DATA.points);}
+      setStatus(true,'مباشر ✓');
+      if(refresh)toast('تم تحديث البيانات');
+      return true;
+    }
+    throw 0;
+  }catch{
+    setStatus(false,'تعذّر جلب البيانات — إعادة المحاولة…');
+    if(refresh)toast('فشل التحديث، سيُعاد المحاولة تلقائياً');
+    return false;
+  }
 }
-function stripGChrome(frame){
-  let doc=null;try{doc=frame.contentDocument||frame.contentWindow.document;}catch(e){return;}
-  if(!doc)return;
-  hideGChrome(doc);
-  const obs=new MutationObserver(()=>hideGChrome(doc));
-  try{obs.observe(doc.documentElement,{childList:true,subtree:true});}catch(e){}
-  const iv=setInterval(()=>{
-    try{if(!document.body.contains(frame)){clearInterval(iv);obs.disconnect();return;}}catch(e){clearInterval(iv);return;}
-    hideGChrome(doc);
-  },800);
-}
-function refreshDock(){
-  const dp=$('#datePicker');dp.min=daysCache[0]||dayKey();dp.max=dayKey();
-  dp.value=viewDate===null?(daysCache.slice(-1)[0]||dayKey()):viewDate;
-  $('#snapCount').textContent=daysCache.length+' يوم محفوظ';
-  $('#btnOlder').disabled=!daysCache.length;
-  $('#btnNewer').disabled=viewDate===null;
+async function triggerRefresh(){ // ask server to pull fresh KML from original map
+  try{await fetch(DATA_API+'?action=refresh',{method:'POST'});}catch{}
 }
 
-/* ---------- protection layer ---------- */
-document.addEventListener('contextmenu',e=>{e.preventDefault();return false;});
-document.addEventListener('selectstart',e=>{if(!e.target.closest('input,textarea'))e.preventDefault();});
-document.addEventListener('dragstart',e=>e.preventDefault());
-document.addEventListener('copy',e=>e.preventDefault());
-document.addEventListener('keydown',e=>{const k=(e.key||'').toLowerCase();
-  if((e.ctrlKey||e.metaKey)&&['u','s','p','c','a'].includes(k)){e.preventDefault();decoy();}
-  if(e.ctrlKey&&e.shiftKey&&['i','j','c'].includes(k)){e.preventDefault();decoy();}
-  if(k==='f12'){e.preventDefault();decoy();}});
-function decoy(){$('#decoy').classList.add('show');setTimeout(()=>$('#decoy').classList.remove('show'),4000);}
-setInterval(()=>{if(window.outerHeight-window.innerHeight>220)decoy();},1200);
-window.open=function(u){if(u&&String(u).includes('/maps/d/edit'))toast('🔒 عرض فقط — التعديل محصور بالإدارة');return null;};
+/* ---------- time machine ---------- */
+async function loadHistory(){
+  try{const r=await fetch(HISTORY_RAW+'?cb='+Date.now(),{cache:'no-store'});if(!r.ok)return;
+    const h=await r.json();histDays=Object.keys(h).sort();
+    const sel=$('daysel');sel.innerHTML='';
+    for(const d of histDays){const o=document.createElement('option');o.value=d;o.textContent=d+(d===today()?' (اليوم)':'');sel.appendChild(o);}
+  }catch{}
+}
+function today(){return new Date().toISOString().slice(0,10);}
+function showDay(day){
+  viewDay=day;
+  $('daylabel').textContent=day==='live'?'':day;
+  $('tLive').classList.toggle('on',day==='live');
+  if(day==='live'){render(DATA.points||[]);setStatus(true,'مباشر ✓');return;}
+  // historical: filter points by date tags found in names/descriptions ([dd MMM] patterns) & archive day count
+  const pts=(DATA.points||[]).filter(p=>!p.dt||p.dt<=day);
+  render(pts);setStatus(true,'عرض تاريخي: '+day);
+}
+$('bTime').addEventListener('click',()=>{
+  const tb=$('timebar');tb.classList.toggle('show');
+  $('bTime').classList.toggle('on');
+  if(tb.classList.contains('show')&&!histDays.length)loadHistory();
+});
+$('tLive').addEventListener('click',()=>showDay('live'));
+$('daysel').addEventListener('change',e=>showDay(e.target.value));
+$('tOlder').addEventListener('click',()=>{const i=histDays.indexOf(viewDay);showDay(histDays[Math.max(0,(i<0?histDays.length:i)-1)])});
+$('tNewer').addEventListener('click',()=>{const i=histDays.indexOf(viewDay);if(i>=histDays.length-1)showDay('live');else showDay(histDays[i+1])});
 
-/* ---------- controls ---------- */
-$('#btnRefresh').onclick=async()=>{$('#syncOverlay').classList.add('show');$('#syncMsg').textContent='جارٍ سحب أحدث بيانات الخارطة…';await pollOnce(true);$('#syncOverlay').classList.remove('show');refreshDock();};
-$('#btnToday').onclick=()=>{viewDate=null;renderView();};
-$('#datePicker').onchange=async e=>{await loadLocalAll();viewDate=e.target.value;renderView();};
-$('#btnOlder').onclick=async()=>{await loadLocalAll();daysCache=Object.keys(HISTORY).sort();const cur=viewDate===null?daysCache.slice(-1)[0]:viewDate;const i=daysCache.indexOf(cur);if(i>0){viewDate=daysCache[i-1];renderView();}else toast('وصلت لأقدم يوم محفوظ');};
-$('#btnNewer').onclick=async()=>{await loadLocalAll();daysCache=Object.keys(HISTORY).sort();const i=daysCache.indexOf(viewDate);if(i>-1&&i<daysCache.length-1){viewDate=daysCache[i+1];renderView();}else{viewDate=null;renderView();}};
-$('#btnBackLive').onclick=()=>{viewDate=null;renderView();};
-$('#btnAdd').onclick=()=>$('#addModal').classList.add('show');
-document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#'+b.dataset.close).classList.remove('show'));
-$('#addModal').onclick=e=>{if(e.target.id==='addModal')$('#addModal').classList.remove('show');};
-$('#btnSend').onclick=async()=>{
-  const name=$('#fName').value.trim(),lat=$('#fLat').value.trim(),lng=$('#fLng').value.trim(),note=$('#fNote').value.trim(),msg=$('#addMsg');
-  msg.className='msg';
-  if(!name||!lat||!lng||isNaN(+lat)||isNaN(+lng)){msg.textContent='يرجى تعبئة الاسم والإحداثيات بشكل صحيح';msg.classList.add('bad');return;}
-  msg.textContent='جارٍ الإرسال…';
-  try{
-    await fetch(ARCHIVE_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'suggest',payload:{name,lat,lng,note,ts:Date.now()}})});
-    msg.textContent='✔ تم استلام اقتراحك وشكراً!';msg.classList.add('ok');
-    ['fName','fLat','fLng','fNote'].forEach(id=>$('#'+id).value='');
-    setTimeout(()=>$('#addModal').classList.remove('show'),1400);
-  }catch(e){msg.textContent='تعذّر الإرسال، حاول لاحقاً';msg.classList.add('bad');}
-};
-document.addEventListener('visibilitychange',()=>{if(!document.hidden){pollOnce(false);if(viewDate===null)renderView();}});
+/* ---------- UI toggles ---------- */
+$('bLayers').addEventListener('click',()=>{$('layers').hidden=!$('layers').hidden;$('bLayers').classList.toggle('on');});
+$('bLabels').addEventListener('click',()=>{showLabels=!showLabels;$('bLabels').classList.toggle('on');if(DATA)render(DATA.points);});
+$('bSearch').addEventListener('click',()=>{$('search').classList.toggle('show');$('bSearch').classList.toggle('on');if($('search').classList.contains('show'))$('q').focus();});
+$('q').addEventListener('input',e=>{
+  const q=e.target.value.trim();const res=$('results');res.innerHTML='';
+  if(q.length<2||!DATA)return;
+  const hits=(viewDay&&viewDay!=='live'?DATA.points:DATA.points).filter(p=>(p.n+' '+p.l+' '+p.d).includes(q)).slice(0,40);
+  for(const p of hits){const el=document.createElement('div');el.className='res';
+    el.innerHTML=`<span class="swatch" style="background:${p.c};display:inline-block"></span> <b>${esc(p.n)}</b><br><small>${esc(p.l)} · ${p.la}, ${p.lo}</small>`;
+    el.addEventListener('click',()=>{map.setView([p.la,p.lo],10);p._m&&p._m.openTooltip&&p._m.openTooltip();});
+    res.appendChild(el);}
+  if(!hits.length)res.innerHTML='<div class="res">لا نتائج</div>';
+});
+$('bReload').addEventListener('click',async()=>{toast('جارٍ سحب آخر نسخة من الخارطة الأصلية…');await triggerRefresh();await loadLive(true);await loadHistory();});
+map.on('zoomend',()=>{if(DATA&&!viewDay)render(DATA.points);});
 
-/* ---------- boot ---------- */
-(async function init(){
-  await openDB().catch(()=>{});
-  await loadHistory();                    // central history first
-  daysCache=Object.keys(HISTORY).sort();
-  await pollOnce(false);                  // 1) immediate pull
-  daysCache=Object.keys(HISTORY).sort();
-  await renderView();                     // 3) show latest saved
-  startPolling();                         // loop every POLL_MS
-  setInterval(async()=>{                  // 2) end-of-day final stamp
-    const n=new Date();
-    if(n.getHours()===23&&n.getMinutes()===59){const {sig}=await fetchMapSignature();if(sig){await recordChange(sig+'#EOD',n);toast('📦 حُفظت نسخة نهاية اليوم');}}
-  },60*1000);
+/* ---------- protection (view only) ---------- */
+document.addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase();
+  if(e.key==='F12'||(e.ctrlKey&&['u','s','p','c','a'].includes(k))||(e.ctrlKey&&e.shiftKey&&['i','j','c'].includes(k))){e.preventDefault();location.href='/blocked';}
+},{capture:true});
+window.addEventListener('paste',e=>e.preventDefault());
+const openW=window.open;window.open=function(u){u=String(u||'');if(/google|mymaps|maps\.app/.test(u))return null;return openW.apply(window,arguments);};
+const iv=setInterval(()=>{if(innerWidth-outerWidth>170||innerHeight-outerHeight>170){$('lock').style.display='grid';}},1200);
+try{Object.defineProperty(navigator,'clipboard',{get:()=>({writeText:()=>Promise.reject(),write:()=>Promise.reject()})});}catch{}
+history.pushState(null,'',location.href);addEventListener('popstate',()=>history.pushState(null,'',location.href));
+
+/* ---------- boot + polling ---------- */
+(async function(){
+  await loadLive(false);
+  if(!DATA){ // bootstrap fallback bundled snapshot
+    try{const r=await fetch('/data/mapdata.json',{cache:'force-cache'});DATA=await r.json();liveSig=DATA.sig||'';buildLayers();render(DATA.points);setStatus(true,'نسخة محلية مبدئية');}catch{setStatus(false,'لا توجد بيانات');}
+  }
+  loadHistory();
+  setInterval(async()=>{ // periodic check: compare sig with server snapshot
+    try{const r=await fetch(DATA_API+'?action=get&cb='+Date.now(),{cache:'no-store'});if(!r.ok)return;
+      const d=await r.json();
+      if(d&&d.points&&d.sig&&d.sig!==liveSig){toast('🔄 تحديث جديد على الخارطة — جارٍ العرض');DATA=d;liveSig=d.sig;buildLayers();if(!viewDay||viewDay==='live')render(DATA.points);}
+    }catch{}
+  },POLL_MS);
+  setTimeout(triggerRefresh,8000); // keep server snapshot fresh for visitors
 })();
 </script>
 </body>
