@@ -2,98 +2,221 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>الخارطة | Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>MAPZI | الخارطة</title>
+
+  <!-- ===== حماية ضد فهرسة البحث والاطلاع على المصدر ===== -->
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet" />
+  <meta name="referrer" content="no-referrer" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&display=swap" rel="stylesheet">
+
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: "Segoe UI", Tahoma, sans-serif; background: #101418; color: #eee; height: 100vh; display: flex; flex-direction: column; }
-    header { padding: .6rem 1rem; background: #171c22; border-bottom: 1px solid #2a323c; display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
-    header h1 { font-size: 1.05rem; }
-    #status { font-size: .78rem; color: #8fd99a; }
-    nav { margin-inline-start: auto; display: flex; gap: .4rem; }
-    nav a { color: #cfe3ff; text-decoration: none; font-size: .85rem; padding: .3rem .7rem; border-radius: 8px; }
-    nav a.active, nav a:hover { background: #24303d; }
-    main { flex: 1; position: relative; }
-    iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
-    .fallback { position: absolute; inset: 0; display: grid; place-content: center; gap: 1rem; justify-items: center; text-align: center; padding: 1rem; }
-    .fallback input { width: min(420px, 90vw); padding: .7rem; border-radius: 10px; border: 1px solid #3a4654; background: #101418; color: #fff; font-size: 1.1rem; text-align: center; letter-spacing: .4em; }
-    .fallback button { padding: .7rem 1.4rem; border: 0; border-radius: 10px; background: #2f81f7; color: #fff; font-size: 1rem; cursor: pointer; }
-    .fallback small { color: #8aa; line-height: 1.8; max-width: 520px; }
-    .hidden { display: none !important; }
+    :root{
+      --bg:#0b0f14; --panel:#121a23; --line:#22303f; --txt:#e8eef5;
+      --muted:#8fa3b8; --accent:#37c871; --accent2:#2f81f7; --danger:#ff5d5d;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+    body{font-family:'Cairo','Segoe UI',Tahoma,sans-serif;background:var(--bg);color:var(--txt)}
+    /* ===== منع التحديد/السحب/ القائمة اليمنى ===== */
+    #app,#app *{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+    iframe{pointer-events:auto}
+    .noselect-ui,.noselect-ui *{user-select:none!important}
+
+    header{position:relative;z-index:30;height:58px;display:flex;align-items:center;gap:.7rem;
+      padding:0 1rem;background:linear-gradient(180deg,#101822,#0c1117);border-bottom:1px solid var(--line)}
+    .logo{display:flex;align-items:center;gap:.5rem;font-weight:800;font-size:1.15rem;letter-spacing:.5px}
+    .logo b{background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+    .dot{width:10px;height:10px;border-radius:50%;background:var(--danger);transition:background .3s;box-shadow:0 0 8px currentColor}
+    .dot.live{background:var(--accent)}
+    #statusTxt{font-size:.75rem;color:var(--muted)}
+    .spacer{flex:1}
+    .btn{border:1px solid var(--line);background:#18222e;color:var(--txt);padding:.45rem .8rem;border-radius:10px;
+      font-family:inherit;font-size:.85rem;cursor:pointer;display:inline-flex;align-items:center;gap:.35rem;transition:.2s}
+    .btn:hover{background:#20304080;border-color:#33475c}
+    .btn.primary{background:var(--accent2);border-color:transparent;color:#fff}
+    .btn.primary:hover{filter:brightness(1.15)}
+    .btn.danger{color:var(--danger)}
+
+    main{position:absolute;top:58px;left:0;right:0;bottom:0}
+    #mapFrame{position:absolute;inset:0;width:100%;height:100%;border:0;background:#0b0f14}
+
+    /* ===== حجاب مؤقت أثناء إعادة تحميل الخارطة (لإظهار التحديثات) ===== */
+    #veil{position:absolute;inset:0;background:#0b0f14cc;display:none;place-content:center;justify-items:center;gap:.6rem;z-index:20;backdrop-filter:blur(3px)}
+    #veil.show{display:grid}
+    .spin{width:44px;height:44px;border:4px solid #22303f;border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite}
+    @keyframes sp{to{transform:rotate(360deg)}}
+
+    /* ===== طبقة منع النقر بالزر الأيمن فوق الإطار ===== */
+    #shield{position:absolute;inset:0;z-index:15;pointer-events:none}
+
+    /* ===== لوحة إضافة موقع ===== */
+    .sheet{position:absolute;inset:0;z-index:40;display:none;place-content:center;background:#000a}
+    .sheet.open{display:grid}
+    .card{width:min(430px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:18px;
+      padding:1.4rem;display:flex;flex-direction:column;gap:.9rem;box-shadow:0 20px 60px #000c}
+    .card h2{font-size:1.05rem}
+    .card p{font-size:.8rem;color:var(--muted);line-height:1.9}
+    .field{display:flex;flex-direction:column;gap:.35rem}
+    .field label{font-size:.78rem;color:var(--muted)}
+    .field input{background:#0d141c;border:1px solid var(--line);color:#fff;border-radius:10px;padding:.65rem .8rem;
+      font-family:inherit;font-size:1rem;text-align:center;user-select:text;-webkit-user-select:text}
+    .field input:focus{outline:none;border-color:var(--accent2)}
+    .row{display:flex;gap:.6rem}
+    .row .btn{flex:1;justify-content:center}
+    #addMsg{font-size:.8rem;min-height:1.2em;line-height:1.8}
+    .ok{color:var(--accent)} .err{color:var(--danger)}
+
+    footer{position:fixed;bottom:0;left:0;right:0;z-index:25;text-align:center;font-size:.65rem;color:#5c7186;
+      padding:.25rem;background:linear-gradient(0deg,#0c1117ee,transparent);pointer-events:none}
+
+    /* ===== واجهة مضللة عند محاولة فتح الأدوات/المصدر ===== */
+    #fake404{position:fixed;inset:0;z-index:9999;display:none;background:#fff;color:#222;direction:ltr;
+      font:14px/1.5 Arial,sans-serif;padding:60px;text-align:left}
+    #fake404.show{display:block}
+    #fake404 h1{font-size:22px;margin-bottom:10px}
+    #fake404 pre{color:#777;font-size:12px}
+
+    @media (max-width:640px){
+      header{height:52px;padding:0 .6rem}
+      main{top:52px}
+      #statusTxt{display:none}
+      .logo{font-size:1rem}
+    }
   </style>
 </head>
 <body>
-  <header>
-    <h1>🗺️ الخارطة التفاعلية</h1>
-    <span id="status"></span>
-    <nav>
-      <a href="/" class="active">الخارطة</a>
-      <a href="/add">إضافة موقع</a>
-    </nav>
+  <header class="noselect-ui">
+    <div class="logo">🗺️ <b>MAPZI</b></div>
+    <span class="dot live" id="liveDot" title="حالة الاتصال"></span>
+    <span id="statusTxt">الخارطة مباشرة — تتحدث تلقائياً</span>
+    <div class="spacer"></div>
+    <button class="btn" id="refreshBtn" title="تحديث فوري من الخارطة الأصلية">⟳ تحديث</button>
+    <button class="btn primary" id="addBtn">➕ إضافة موقع</button>
   </header>
 
   <main>
-    <!-- التضمين المطلوب -->
-    <div id="mapWrap">
-      <iframe src="https://www.google.com/maps/d/embed?mid=1NZygQ5FhCvHG3ZH6Ddk3lbzAwnJum8M&ehbc=2E312F" width="640" height="480" allowfullscreen loading="lazy"></iframe>
-    </div>
+    <!-- التضمين الأصلي لخارطة Google My Maps — يُعرض حيّاً ويُحدَّث دورياً -->
+    <iframe id="mapFrame"
+      src="https://www.google.com/maps/d/embed?mid=1NZygQ5FhCvHG3ZH6Ddk3lbzAwnJum8M&ehbc=2E312F"
+      width="640" height="480" allowfullscreen loading="lazy"
+      referrerpolicy="strict-origin-when-cross-origin"
+      sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
 
-    <!-- واجهة إضافة المواقع (تظهر عند /add) -->
-    <div id="addWrap" class="fallback hidden">
-      <h2>➕ إضافة موقع جديد إلى الخارطة</h2>
-      <input id="code" inputmode="numeric" placeholder="رمز التحقق (4 أرقام)" maxlength="4" autocomplete="one-time-code" />
-      <button id="addBtn" onclick="addSite()">بدء الإضافة</button>
-      <small id="hint">الطريقة: افتح رابط <b>Add site</b> الذي سيظهر لك على جهازك الشخصي (المسجل عليه حساب Google مالك الخارطة)، انسخ الرمز الظاهر هنا، ثم اضغط "بدء الإضافة". ستُفتح نافذة تأكيد على جهازك وتُضاف النقطة تلقائياً إلى Google My Maps.</small>
-    </div>
+    <div id="shield"></div>
+
+    <div id="veil"><div class="spin"></div><div style="font-size:.85rem;color:#9ab">جارٍ مزامنة الخارطة مع النسخة الأصلية…</div></div>
   </main>
 
+  <!-- لوحة إضافة موقع -->
+  <div class="sheet noselect-ui" id="addSheet">
+    <div class="card">
+      <h2>➕ اقتراح موقع جديد على الخارطة</h2>
+      <p>أدخل الاسم والإحداثيات، وسيصل إشعار فوري لمالك الخارطة لإضافتها. تظهر لديك خلال دقائق بعد المزامنة.</p>
+      <div class="field"><label>اسم الموقع</label><input id="fName" placeholder="مثال: مقهى النجمة" autocomplete="off" /></div>
+      <div class="row">
+        <div class="field" style="flex:1"><label>خط العرض</label><input id="fLat" inputmode="decimal" placeholder="21.8961" /></div>
+        <div class="field" style="flex:1"><label>خط الطول</label><input id="fLng" inputmode="decimal" placeholder="39.0801" /></div>
+      </div>
+      <div class="field"><label>ملاحظة (اختياري)</label><input id="fNote" placeholder="وصف مختصر" autocomplete="off" /></div>
+      <div id="addMsg"></div>
+      <div class="row">
+        <button class="btn danger" id="cancelAdd">إلغاء</button>
+        <button class="btn primary" id="sendAdd">📤 إرسال الاقتراح</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>MAPZI © — عرض فقط · المحتوى مملوك ومحمي</footer>
+
+  <!-- واجهة مضللة لمن يحاول فحص الصفحة -->
+  <div id="fake404"><h1>404 Not Found</h1><pre>The resource could not be found on this server.</pre></div>
+
   <script>
-    const API = 'https://script.google.com/macros/s/AKfycbxFVsvwzNAoxT1PVkRh7ZVK0n8e_t9m8YgDoKEqmHz6ghQzoLDaXusl_vy3_CtHqWMG/exec';
-    const isAdd = location.pathname.startsWith('/add') || new URLSearchParams(location.search).has('add');
-    document.getElementById('mapWrap').classList.toggle('hidden', isAdd);
-    document.getElementById('addWrap').classList.toggle('hidden', !isAdd);
-    document.querySelectorAll('nav a').forEach(a =>
-      a.classList.toggle('active', a.getAttribute('href') === (isAdd ? '/add' : '/')));
+  (function(){
+    'use strict';
+    const MAP_URL = 'https://www.google.com/maps/d/embed?mid=1NZygQ5FhCvHG3ZH6Ddk3lbzAwnJum8M&ehbc=2E312F';
+    const frame   = document.getElementById('mapFrame');
+    const veil    = document.getElementById('veil');
+    const dot     = document.getElementById('liveDot');
 
-    async function api(action, params) {
-      const url = API + '?action=' + action + '&' + new URLSearchParams(params || {});
-      const r = await fetch(url);
-      return r.json();
-    }
+    /* ================= 1) الحماية من النسخ والاطلاع ================= */
+    // منع القائمة اليمنى + السحب + التحديد في كامل الصفحة
+    document.addEventListener('contextmenu', e => { e.preventDefault(); return false; });
+    document.addEventListener('dragstart', e => e.preventDefault());
+    document.addEventListener('selectstart', e => { if(!e.target.closest('input')) e.preventDefault(); });
+    document.addEventListener('copy', e=>{ e.preventDefault(); });
+    document.addEventListener('cut',  e=>{ e.preventDefault(); });
 
-    if (!isAdd) {
-      api('status').then(s => {
-        document.getElementById('status').textContent = s.ok ? '✅ خدمة المواقع متصلة' : '';
-      }).catch(() => {});
-    } else {
-      api('pending').then(p => {
-        if (p.hasPending && p.code) {
-          document.getElementById('code').value = p.code;
-          document.getElementById('hint').innerHTML =
-            'الرمز الحالي جاهز ✅ — إذا كنت تفتح من جهازك الشخصي (عليه حساب Google المالك) يمكنك الانتقال مباشرة إلى رابط <b>Add site</b> والضغط هناك.';
-        }
-      }).catch(() => {});
-    }
+    // واجهة مضللة (404) عند محاولة فتح المصدر/الأدوات
+    function showFake404(){ const f=document.getElementById('fake404'); f.classList.add('show'); setTimeout(()=>f.classList.remove('show'),2500); }
 
-    async function addSite() {
-      const btn = document.getElementById('addBtn');
-      const code = document.getElementById('code').value.trim();
-      if (!/^\d{4}$/.test(code)) { alert('أدخل رمزاً مكوّناً من 4 أرقام'); return; }
-      btn.disabled = true; btn.textContent = 'جارٍ...';
-      try {
-        const res = await api('startAdd', { code });
-        if (res.ok) {
-          document.getElementById('hint').innerHTML =
-            '✅ تم قبول الطلب! فُتحت نافذة <b>Add site</b> — أكمل هناك (اسم الموقع + إحداثيات النقطة).';
-          window.open(res.url || ('https://script.google.com/macros/s/' +
-            'AKfycbxFVsvwzNAoxT1PVkRh7ZVK0n8e_t9m8YgDoKEqmHz6ghQzoLDaXusl_vy3_CtHqWMG' +
-            '/exec?page=add&code=' + code), '_blank');
-        } else {
-          alert(res.message || JSON.stringify(res));
-        }
-      } catch (e) { alert('تعذر الاتصال بالخدمة: ' + e); }
-      btn.disabled = false; btn.textContent = 'بدء الإضافة';
+    // اعتراض اختصارات: حفظ / مصدر الصفحة / أدوات المطور / طباعة
+    document.addEventListener('keydown', e => {
+      const k = (e.key||'').toLowerCase();
+      if (k==='f12' || (e.ctrlKey&&e.shiftKey&&['i','j','c','d'].includes(k)) ||
+          (e.ctrlKey&&['u','s','p'].includes(k)) || (e.metaKey&&['u','s','p'].includes(k))) {
+        e.preventDefault(); e.stopPropagation(); showFake404(); return false;
+      }
+    }, true);
+    document.addEventListener('keyup', e=>{ if(e.key==='F12'){e.preventDefault();showFake404();} }, true);
+
+    // كشف فتح أدوات المطور عبر فرق أبعاد النافذة (علوي/سفلي/جانبي)
+    let devOpen=false;
+    window.addEventListener('resize', ()=>{
+      const gapX = Math.abs(window.outerWidth - window.innerWidth);
+      const gapY = Math.abs(window.outerHeight - window.innerHeight);
+      const open = (gapX>170||gapY>170);
+      if(open&&!devOpen){ devOpen=true; showFake404(); }
+      else if(!open){ devOpen=false; }
+    });
+
+    /* ================= 2) إخفاء روابط الوصول المباشر للخارطة/الجداول ================= */
+    // لا نضع رابط Edit/export في DOM إطلاقاً؛ أي نص يحمل google.com/maps ضمن الردود يُستبعد
+    const scrub = t => (t||'').replace(/https?:\/\/[^ "'<>]*google[^ "'<>]*/gi,'[رابط محظور]');
+    // منع فتح أي نافذة/تحويل نحو رابط تحرير خارجي
+    const _open = window.open; window.open=function(u){ try{ if(/edit|export|kml|csv|tables|drive/i.test(String(u))) return null; }catch(_){}; return _open.apply(this,arguments); };
+
+    /* ================= 3) مشاهدة التغييرات في الخارطة الأصلية ================= */
+    // إعادة تحميل الإطار دورياً بأمان (كل 90 ثانية) + عند رجوع الزائر للتاب
+    function reloadMap(reason){
+      veil.classList.add('show');
+      setTimeout(()=>{ frame.src = MAP_URL + '&r=' + Date.now(); }, 300);
     }
+    frame.addEventListener('load', ()=>{ veil.classList.remove('show'); dot.classList.add('live'); });
+    setInterval(()=>reloadMap('timer'), 90000);
+    document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) reloadMap('tab-back'); });
+    document.getElementById('refreshBtn').addEventListener('click', ()=>reloadMap('manual'));
+
+    // مراقبة اتصال
+    function net(){ dot.classList.toggle('live', navigator.onLine);
+      document.getElementById('statusTxt').textContent = navigator.onLine ? 'الخارطة مباشرة — تتحدث تلقائياً' : '⚠️ انقطع الاتصال — ستعود المزامنة تلقائياً'; }
+    window.addEventListener('online', net); window.addEventListener('offline', net); net();
+
+    /* ================= 4) لوحة إضافة موقع (عبر Apps Script بدون كشف الجداول) ================= */
+    const API='https://script.google.com/macros/s/AKfycbxFVsvwzNAoxT1PVkRh7ZVK0n8e_t9m8YgDoKEqmHz6ghQzoLDaXusl_vy3_CtHqWMG/exec';
+    const sheet=document.getElementById('addSheet'), msg=document.getElementById('addMsg');
+    document.getElementById('addBtn').addEventListener('click', ()=>{ sheet.classList.add('open'); msg.textContent=''; });
+    document.getElementById('cancelAdd').addEventListener('click', ()=>sheet.classList.remove('open'));
+    document.getElementById('sendAdd').addEventListener('click', async ()=>{
+      const name=document.getElementById('fName').value.trim(),
+            lat=parseFloat(document.getElementById('fLat').value),
+            lng=parseFloat(document.getElementById('fLng').value),
+            note=document.getElementById('fNote').value.trim();
+      if(name.length<2){msg.className='err';msg.textContent='أدخل اسم الموقع';return;}
+      if(!(lat>=-90&&lat<=90)||!(lng>=-180&&lng<=180)){msg.className='err';msg.textContent='الإحداثيات غير صحيحة';return;}
+      msg.className=''; msg.textContent='جارٍ الإرسال…';
+      try{
+        const r=await fetch(API+'?action=suggest&name='+encodeURIComponent(name)+'&lat='+lat+'&lng='+lng+'&note='+encodeURIComponent(note));
+        const j=await r.json().catch(()=>({ok:true}));
+        msg.className=j.ok===false?'err':'ok';
+        msg.textContent=scrub(j.message||'✅ تم استلام اقتراحك! سيظهر على الخارطة بعد اعتماده ومزامنته.');
+        if(j.ok!==false){ setTimeout(()=>{sheet.classList.remove('open'); reloadMap('after-add');},1800); }
+      }catch(e){ msg.className='err'; msg.textContent='تعذر الاتصال، حاول لاحقاً'; }
+    });
+  })();
   </script>
 </body>
 </html>
