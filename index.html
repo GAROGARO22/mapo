@@ -159,6 +159,11 @@ function buildLayers(){
   }
 }
 
+
+/* ---------- date tags for time machine ---------- */
+const MON={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',sept:'09',oct:'10',nov:'11',dec:'12'};
+function tagDates(d){for(const p of (d.points||[])){if(p.dt)continue;const m=(p.n+' '+(p.d||'')).match(/\[?\s*(\d{1,2})\s*([A-Za-z]{3,4})/);if(m){const mo=MON[m[2].toLowerCase().slice(0,4)]||MON[m[2].toLowerCase().slice(0,3)];if(mo)p.dt=(m[1]>20?'2026-':'2026-')+mo+'-'+String(m[1]).padStart(2,'0');}}}
+
 /* ---------- data loading ---------- */
 async function loadLive(refresh){
   try{
@@ -166,7 +171,7 @@ async function loadLive(refresh){
     if(!r.ok)throw 0;
     const d=await r.json();
     if(d&&d.points&&d.points.length){
-      DATA=d;liveSig=d.sig||'';
+      DATA=d;liveSig=d.sig||'';tagDates(DATA);
       if(!viewDay){buildLayers();render(DATA.points);}
       setStatus(true,'مباشر ✓');
       if(refresh)toast('تم تحديث البيانات');
@@ -185,11 +190,14 @@ async function triggerRefresh(){ // ask server to pull fresh KML from original m
 
 /* ---------- time machine ---------- */
 async function loadHistory(){
-  try{const r=await fetch(HISTORY_RAW+'?cb='+Date.now(),{cache:'no-store'});if(!r.ok)return;
-    const h=await r.json();histDays=Object.keys(h).sort();
+  let h=null;
+  try{const r=await fetch(HISTORY_RAW+'?cb='+Date.now(),{cache:'no-store'});if(r.ok)h=await r.json();}catch{}
+  if(!h){try{const r=await fetch('/data/history.json',{cache:'force-cache'});if(r.ok)h=await r.json();}catch{}}
+  if(h){
+    histDays=Object.keys(h).sort();
     const sel=$('daysel');sel.innerHTML='';
     for(const d of histDays){const o=document.createElement('option');o.value=d;o.textContent=d+(d===today()?' (اليوم)':'');sel.appendChild(o);}
-  }catch{}
+  }
 }
 function today(){return new Date().toISOString().slice(0,10);}
 function showDay(day){
@@ -243,13 +251,13 @@ history.pushState(null,'',location.href);addEventListener('popstate',()=>history
 (async function(){
   await loadLive(false);
   if(!DATA){ // bootstrap fallback bundled snapshot
-    try{const r=await fetch('/data/mapdata.json',{cache:'force-cache'});DATA=await r.json();liveSig=DATA.sig||'';buildLayers();render(DATA.points);setStatus(true,'نسخة محلية مبدئية');}catch{setStatus(false,'لا توجد بيانات');}
+    try{const r=await fetch('/data/mapdata.json',{cache:'force-cache'});DATA=await r.json();tagDates(DATA);liveSig=DATA.sig||'';buildLayers();render(DATA.points);setStatus(true,'نسخة محلية مبدئية');}catch{setStatus(false,'لا توجد بيانات');}
   }
   loadHistory();
   setInterval(async()=>{ // periodic check: compare sig with server snapshot
     try{const r=await fetch(DATA_API+'?action=get&cb='+Date.now(),{cache:'no-store'});if(!r.ok)return;
       const d=await r.json();
-      if(d&&d.points&&d.sig&&d.sig!==liveSig){toast('🔄 تحديث جديد على الخارطة — جارٍ العرض');DATA=d;liveSig=d.sig;buildLayers();if(!viewDay||viewDay==='live')render(DATA.points);}
+      if(d&&d.points&&d.sig&&d.sig!==liveSig){toast('🔄 تحديث جديد على الخارطة — جارٍ العرض');DATA=d;liveSig=d.sig;tagDates(DATA);buildLayers();if(!viewDay||viewDay==='live')render(DATA.points);}
     }catch{}
   },POLL_MS);
   setTimeout(triggerRefresh,8000); // keep server snapshot fresh for visitors
@@ -257,6 +265,3 @@ history.pushState(null,'',location.href);addEventListener('popstate',()=>history
 </script>
 </body>
 </html>
-<!-- MAPZI-DEPLOY-TRIGGER -->
-<!-- MAPZI-DEPLOY-TRIGGER-2 -->
-<!-- MAPZI-DEPLOY-TRIGGER-3 -->
