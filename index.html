@@ -1,221 +1,310 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>MAPZI | الخارطة</title>
-
-  <!-- ===== حماية ضد فهرسة البحث والاطلاع على المصدر ===== -->
-  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet" />
-  <meta name="referrer" content="no-referrer" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&display=swap" rel="stylesheet">
-
-  <style>
-    :root{
-      --bg:#0b0f14; --panel:#121a23; --line:#22303f; --txt:#e8eef5;
-      --muted:#8fa3b8; --accent:#37c871; --accent2:#2f81f7; --danger:#ff5d5d;
-    }
-    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-    html,body{height:100%;overflow:hidden;overscroll-behavior:none}
-    body{font-family:'Cairo','Segoe UI',Tahoma,sans-serif;background:var(--bg);color:var(--txt)}
-    /* ===== منع التحديد/السحب/ القائمة اليمنى ===== */
-    #app,#app *{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-    iframe{pointer-events:auto}
-    .noselect-ui,.noselect-ui *{user-select:none!important}
-
-    header{position:relative;z-index:30;height:58px;display:flex;align-items:center;gap:.7rem;
-      padding:0 1rem;background:linear-gradient(180deg,#101822,#0c1117);border-bottom:1px solid var(--line)}
-    .logo{display:flex;align-items:center;gap:.5rem;font-weight:800;font-size:1.15rem;letter-spacing:.5px}
-    .logo b{background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
-    .dot{width:10px;height:10px;border-radius:50%;background:var(--danger);transition:background .3s;box-shadow:0 0 8px currentColor}
-    .dot.live{background:var(--accent)}
-    #statusTxt{font-size:.75rem;color:var(--muted)}
-    .spacer{flex:1}
-    .btn{border:1px solid var(--line);background:#18222e;color:var(--txt);padding:.45rem .8rem;border-radius:10px;
-      font-family:inherit;font-size:.85rem;cursor:pointer;display:inline-flex;align-items:center;gap:.35rem;transition:.2s}
-    .btn:hover{background:#20304080;border-color:#33475c}
-    .btn.primary{background:var(--accent2);border-color:transparent;color:#fff}
-    .btn.primary:hover{filter:brightness(1.15)}
-    .btn.danger{color:var(--danger)}
-
-    main{position:absolute;top:58px;left:0;right:0;bottom:0}
-    #mapFrame{position:absolute;inset:0;width:100%;height:100%;border:0;background:#0b0f14}
-
-    /* ===== حجاب مؤقت أثناء إعادة تحميل الخارطة (لإظهار التحديثات) ===== */
-    #veil{position:absolute;inset:0;background:#0b0f14cc;display:none;place-content:center;justify-items:center;gap:.6rem;z-index:20;backdrop-filter:blur(3px)}
-    #veil.show{display:grid}
-    .spin{width:44px;height:44px;border:4px solid #22303f;border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite}
-    @keyframes sp{to{transform:rotate(360deg)}}
-
-    /* ===== طبقة منع النقر بالزر الأيمن فوق الإطار ===== */
-    #shield{position:absolute;inset:0;z-index:15;pointer-events:none}
-
-    /* ===== لوحة إضافة موقع ===== */
-    .sheet{position:absolute;inset:0;z-index:40;display:none;place-content:center;background:#000a}
-    .sheet.open{display:grid}
-    .card{width:min(430px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:18px;
-      padding:1.4rem;display:flex;flex-direction:column;gap:.9rem;box-shadow:0 20px 60px #000c}
-    .card h2{font-size:1.05rem}
-    .card p{font-size:.8rem;color:var(--muted);line-height:1.9}
-    .field{display:flex;flex-direction:column;gap:.35rem}
-    .field label{font-size:.78rem;color:var(--muted)}
-    .field input{background:#0d141c;border:1px solid var(--line);color:#fff;border-radius:10px;padding:.65rem .8rem;
-      font-family:inherit;font-size:1rem;text-align:center;user-select:text;-webkit-user-select:text}
-    .field input:focus{outline:none;border-color:var(--accent2)}
-    .row{display:flex;gap:.6rem}
-    .row .btn{flex:1;justify-content:center}
-    #addMsg{font-size:.8rem;min-height:1.2em;line-height:1.8}
-    .ok{color:var(--accent)} .err{color:var(--danger)}
-
-    footer{position:fixed;bottom:0;left:0;right:0;z-index:25;text-align:center;font-size:.65rem;color:#5c7186;
-      padding:.25rem;background:linear-gradient(0deg,#0c1117ee,transparent);pointer-events:none}
-
-    /* ===== واجهة مضللة عند محاولة فتح الأدوات/المصدر ===== */
-    #fake404{position:fixed;inset:0;z-index:9999;display:none;background:#fff;color:#222;direction:ltr;
-      font:14px/1.5 Arial,sans-serif;padding:60px;text-align:left}
-    #fake404.show{display:block}
-    #fake404 h1{font-size:22px;margin-bottom:10px}
-    #fake404 pre{color:#777;font-size:12px}
-
-    @media (max-width:640px){
-      header{height:52px;padding:0 .6rem}
-      main{top:52px}
-      #statusTxt{display:none}
-      .logo{font-size:1rem}
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+<title>MAPZI | الخارطة الزمنية</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b1220; --panel:#131c2e; --panel2:#1a2540; --line:#26334f;
+  --txt:#e8eefc; --muted:#8ea0c4; --acc:#38bdf8; --acc2:#818cf8; --ok:#34d399; --warn:#fbbf24; --bad:#f87171;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'Cairo',system-ui,sans-serif;background:var(--bg);color:var(--txt);overflow:hidden;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+header{position:fixed;top:0;left:0;right:0;height:56px;z-index:50;display:flex;align-items:center;gap:10px;padding:0 14px;background:linear-gradient(180deg,rgba(11,18,32,.96),rgba(11,18,32,.85));border-bottom:1px solid var(--line);backdrop-filter:blur(10px)}
+.logo{display:flex;align-items:center;gap:8px;font-weight:900;font-size:20px}
+.logo .m{background:linear-gradient(135deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.spacer{flex:1}
+.status{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);white-space:nowrap}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--bad);transition:.3s}
+.dot.on{background:var(--ok)}
+.btn{appearance:none;border:1px solid var(--line);background:var(--panel2);color:var(--txt);font-family:inherit;font-weight:700;font-size:13px;padding:8px 14px;border-radius:10px;cursor:pointer;transition:.18s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--acc);transform:translateY(-1px)}
+.btn.primary{background:linear-gradient(135deg,var(--acc),var(--acc2));border:none;color:#06121f}
+.btn.icon{padding:8px 10px;font-size:16px}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+#stage{position:fixed;top:56px;left:0;right:0;bottom:0;background:#0e1626}
+iframe#map{width:100%;height:100%;border:0;display:block;background:#0e1626}
+.overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:rgba(11,18,32,.72);z-index:20;backdrop-filter:blur(4px)}
+.overlay.show{display:flex}
+.spinner{width:44px;height:44px;border-radius:50%;border:4px solid var(--line);border-top-color:var(--acc);animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.overlay p{color:var(--muted);font-weight:600}
+#dateBanner{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:30;display:none;align-items:center;gap:10px;padding:9px 18px;border-radius:999px;background:rgba(251,191,36,.14);border:1px solid rgba(251,191,36,.5);color:var(--warn);font-weight:800;font-size:14px;box-shadow:0 6px 24px rgba(0,0,0,.4)}
+#dateBanner.live{background:rgba(52,211,153,.12);border-color:rgba(52,211,153,.45);color:var(--ok)}
+#dateBanner.show{display:flex}
+#dock{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:40;display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:16px;background:rgba(19,28,46,.92);border:1px solid var(--line);backdrop-filter:blur(12px);box-shadow:0 10px 40px rgba(0,0,0,.5);max-width:96vw;flex-wrap:wrap;justify-content:center}
+#dock .nav{font-size:18px;padding:8px 12px}
+#datePicker{font-family:inherit;font-weight:700;font-size:13px;color:var(--txt);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;cursor:pointer;color-scheme:dark}
+#snapCount{font-size:11px;color:var(--muted);padding:0 4px}
+.modal{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;background:rgba(4,8,16,.7);backdrop-filter:blur(6px);padding:16px}
+.modal.show{display:flex}
+.card{width:min(480px,100%);background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 24px 80px rgba(0,0,0,.6);position:relative}
+.card h2{font-size:19px;margin-bottom:4px}
+.card .sub{color:var(--muted);font-size:13px;margin-bottom:16px}
+.field{margin-bottom:13px}
+.field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px}
+.field input,.field textarea{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--txt);font-family:inherit;font-size:14px;padding:10px 12px;outline:none;transition:.15s}
+.field input:focus,.field textarea:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(56,189,248,.15)}
+.field textarea{resize:vertical;min-height:70px}
+.row{display:flex;gap:10px}.row .field{flex:1}
+.card .actions{display:flex;gap:10px;margin-top:18px}
+.card .actions .btn{flex:1;justify-content:center}
+.msg{font-size:13px;font-weight:700;margin-top:10px;min-height:18px}
+.msg.ok{color:var(--ok)}.msg.bad{color:var(--bad)}
+.closeX{position:absolute;top:12px;left:14px;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer}
+#decoy{position:fixed;inset:0;z-index:999;display:none;background:#fff;color:#202124;font-family:Arial,sans-serif;text-align:center;padding-top:18vh}
+#decoy.show{display:block}
+#decoy h1{font-size:26px;font-weight:400;margin-bottom:12px}
+#decoy p{font-size:14px;color:#5f6368}
+#toast{position:fixed;top:70px;left:50%;transform:translateX(-50%) translateY(-16px);z-index:70;background:var(--panel2);border:1px solid var(--acc);color:var(--txt);padding:10px 18px;border-radius:12px;font-weight:700;font-size:13px;opacity:0;pointer-events:none;transition:.3s;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (max-width:640px){header{padding:0 8px;gap:6px}.logo{font-size:16px}.status span.lbl{display:none}.btn{padding:7px 10px;font-size:12px}#dock{bottom:10px;gap:6px;padding:8px}}
+</style>
 </head>
 <body>
-  <header class="noselect-ui">
-    <div class="logo">🗺️ <b>MAPZI</b></div>
-    <span class="dot live" id="liveDot" title="حالة الاتصال"></span>
-    <span id="statusTxt">الخارطة مباشرة — تتحدث تلقائياً</span>
-    <div class="spacer"></div>
-    <button class="btn" id="refreshBtn" title="تحديث فوري من الخارطة الأصلية">⟳ تحديث</button>
-    <button class="btn primary" id="addBtn">➕ إضافة موقع</button>
-  </header>
 
-  <main>
-    <!-- التضمين الأصلي لخارطة Google My Maps — يُعرض حيّاً ويُحدَّث دورياً -->
-    <iframe id="mapFrame"
-      src="https://www.google.com/maps/d/embed?mid=1NZygQ5FhCvHG3ZH6Ddk3lbzAwnJum8M&ehbc=2E312F"
-      width="640" height="480" allowfullscreen loading="lazy"
-      referrerpolicy="strict-origin-when-cross-origin"></iframe>
+<header>
+  <div class="logo"><span>🗺️</span><span class="m">MAPZI</span></div>
+  <div class="spacer"></div>
+  <div class="status"><span class="dot" id="netDot"></span><span class="lbl" id="histLbl">…</span></div>
+  <button class="btn icon" id="btnRefresh" title="تحديث الآن">⟳</button>
+  <button class="btn primary" id="btnAdd">➕ إضافة موقع</button>
+</header>
 
-    <div id="shield"></div>
+<div id="stage">
+  <iframe id="map" src="about:blank" title="الخارطة" allow="fullscreen" referrerpolicy="no-referrer"></iframe>
+  <div class="overlay show" id="loadOverlay"><div class="spinner"></div><p>جارٍ تحميل الخارطة…</p></div>
+  <div class="overlay" id="syncOverlay"><div class="spinner"></div><p id="syncMsg">جارٍ المزامنة…</p></div>
+  <div id="dateBanner"><span id="dateIcon">⏪</span><span id="dateTxt"></span>&nbsp;<button class="btn" id="btnBackLive" style="padding:4px 12px;font-size:12px">العودة للحاضر ●</button></div>
+</div>
 
-    <div id="veil"><div class="spin"></div><div style="font-size:.85rem;color:#9ab">جارٍ مزامنة الخارطة مع النسخة الأصلية…</div></div>
-  </main>
+<div id="dock">
+  <button class="btn nav" id="btnOlder" title="يوم أقدم">⏮</button>
+  <input type="date" id="datePicker" title="اختر يوماً">
+  <button class="btn nav" id="btnNewer" title="يوم أحدث">⏭</button>
+  <span id="snapCount"></span>
+  <button class="btn" id="btnToday">اليوم ●</button>
+</div>
 
-  <!-- لوحة إضافة موقع -->
-  <div class="sheet noselect-ui" id="addSheet">
-    <div class="card">
-      <h2>➕ اقتراح موقع جديد على الخارطة</h2>
-      <p>أدخل الاسم والإحداثيات، وسيصل إشعار فوري لمالك الخارطة لإضافتها. تظهر لديك خلال دقائق بعد المزامنة.</p>
-      <div class="field"><label>اسم الموقع</label><input id="fName" placeholder="مثال: مقهى النجمة" autocomplete="off" /></div>
-      <div class="row">
-        <div class="field" style="flex:1"><label>خط العرض</label><input id="fLat" inputmode="decimal" placeholder="21.8961" /></div>
-        <div class="field" style="flex:1"><label>خط الطول</label><input id="fLng" inputmode="decimal" placeholder="39.0801" /></div>
-      </div>
-      <div class="field"><label>ملاحظة (اختياري)</label><input id="fNote" placeholder="وصف مختصر" autocomplete="off" /></div>
-      <div id="addMsg"></div>
-      <div class="row">
-        <button class="btn danger" id="cancelAdd">إلغاء</button>
-        <button class="btn primary" id="sendAdd">📤 إرسال الاقتراح</button>
-      </div>
+<div class="modal" id="addModal">
+  <div class="card">
+    <button class="closeX" data-close="addModal">✕</button>
+    <h2>➕ اقتراح موقع جديد</h2>
+    <p class="sub">يقترح الزائر موقعه، ويظهر على الخارطة بعد اعتماده من الإدارة.</p>
+    <div class="field"><label>اسم المكان *</label><input id="fName" maxlength="80" placeholder="مثال: حديقة السلام"></div>
+    <div class="row">
+      <div class="field"><label>خط العرض *</label><input id="fLat" inputmode="decimal" placeholder="33.5138"></div>
+      <div class="field"><label>خط الطول *</label><input id="fLng" inputmode="decimal" placeholder="36.2765"></div>
     </div>
+    <div class="field"><label>ملاحظة (اختياري)</label><textarea id="fNote" maxlength="300" placeholder="وصف مختصر…"></textarea></div>
+    <div class="actions">
+      <button class="btn" data-close="addModal">إلغاء</button>
+      <button class="btn primary" id="btnSend">إرسال الاقتراح</button>
+    </div>
+    <div class="msg" id="addMsg"></div>
   </div>
+</div>
 
-  <footer>MAPZI © — عرض فقط · المحتوى مملوك ومحمي</footer>
+<div id="decoy"><h1>404. <span style="color:#5f6368">That’s an error.</span></h1><p>The requested URL was not found on this server. That’s all we know.</p></div>
+<div id="toast"></div>
 
-  <!-- واجهة مضللة لمن يحاول فحص الصفحة -->
-  <div id="fake404"><h1>404 Not Found</h1><pre>The resource could not be found on this server.</pre></div>
+<script>
+'use strict';
+/* ===== MAPZI Time-Machine =====
+   1) Background pull of map data every POLL_MS
+   2) Daily rollup file per date in IndexedDB history
+   3) UI shows latest saved snapshot by default
+   4) Time-machine dock to navigate past days
+*/
+const MID='1NZygQ5FhCvHG3ZH6Ddk3lbzAwnJum8M', EHBC='2E312F';
+const EMBED_URL=`https://www.google.com/maps/d/embed?mid=${MID}&ehbc=${EHBC}`;
+const KML_URL=`https://www.google.com/maps/d/kml?mid=${MID}&forcekml=1`;
+const ARCHIVE_REPO='mapzi-archive';        // private GitHub repo holding history.json
+const ARCHIVE_API='/api/archive';          // serverless proxy (vercel rewrite -> functions)
+const ARCHIVE_TOKEN_HINT='Archive token is stored server-side (env GITHUB_TOKEN). Visitors never see it.';
+const POLL_MS=60*1000;                     // <- 1 minute background pull (change freely)
+const SNAP_DB='mapzi_history_v1', SNAP_STORE='days';
 
-  <script>
-  (function(){
-    'use strict';
-    const MAP_URL = 'https://www.google.com/maps/d/embed?mid=1NZygQ5FhCvHG3ZH6Ddk3lbzAwnJum8M&ehbc=2E312F';
-    const frame   = document.getElementById('mapFrame');
-    const veil    = document.getElementById('veil');
-    const dot     = document.getElementById('liveDot');
+const $=s=>document.querySelector(s);
+const dayKey=(d=new Date())=>d.toLocaleDateString('en-CA');
+function toast(t){const el=$('#toast');el.textContent=t;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2600);}
 
-    /* ================= 1) الحماية من النسخ والاطلاع ================= */
-    // منع القائمة اليمنى + السحب + التحديد في كامل الصفحة
-    document.addEventListener('contextmenu', e => { e.preventDefault(); return false; });
-    document.addEventListener('dragstart', e => e.preventDefault());
-    document.addEventListener('selectstart', e => { if(!e.target.closest('input')) e.preventDefault(); });
-    document.addEventListener('copy', e=>{ e.preventDefault(); });
-    document.addEventListener('cut',  e=>{ e.preventDefault(); });
+/* ---------- local IndexedDB mirror ---------- */
+let dbP=null;
+function openDB(){if(dbP)return dbP;dbP=new Promise((res,rej)=>{const r=indexedDB.open(SNAP_DB,1);r.onupgradeneeded=e=>e.target.result.createObjectStore(SNAP_STORE);r.onsuccess=e=>res(e.target.result);r.onerror=e=>rej(e.error);});return dbP;}
+async function idbGet(k){const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(SNAP_STORE).objectStore(SNAP_STORE).get(k);t.onsuccess=()=>res(t.result||null);t.onerror=()=>rej(t.error);});}
+async function idbPut(k,v){const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(SNAP_STORE,'readwrite').objectStore(SNAP_STORE).put(v,k);t.onsuccess=()=>res();t.onerror=()=>rej(t.error);});}
+async function idbKeys(){const db=await openDB();return new Promise((res,rej)=>{const rq=db.transaction(SNAP_STORE).objectStore(SNAP_STORE).getAllKeys();rq.onsuccess=()=>res(rq.result||[]);rq.onerror=()=>rej(rq.error);});}
 
-    // واجهة مضللة (404) عند محاولة فتح المصدر/الأدوات
-    function showFake404(){ const f=document.getElementById('fake404'); f.classList.add('show'); setTimeout(()=>f.classList.remove('show'),2500); }
+/* ---------- shared history model ----------
+   history = { "YYYY-MM-DD": { updates:[{t,sig}], latest:sig } }
+   Stored centrally as history.json in the private archive repo, mirrored locally. */
+let HISTORY={};
+async function loadHistory(){
+  try{
+    const r=await fetch(ARCHIVE_API+'?action=get&_='+Date.now(),{cache:'no-store'});
+    if(r.ok){HISTORY=await r.json()||{};}
+  }catch(e){ /* offline: fall back to local mirror */ }
+  for(const k of Object.keys(HISTORY)){ await idbPut(k,HISTORY[k]); }
+}
+async function saveHistory(){
+  await loadLocalAll();
+  try{
+    await fetch(ARCHIVE_API,{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',
+      body:JSON.stringify({action:'save',history:HISTORY})});
+  }catch(e){ /* keep local mirror authoritative until next sync */ }
+}
+async function loadLocalAll(){
+  const keys=(await idbKeys()).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+  for(const k of keys){ const v=await idbGet(k); if(v) HISTORY[k]=v; }
+  return keys;
+}
 
-    // اعتراض اختصارات: حفظ / مصدر الصفحة / أدوات المطور / طباعة
-    document.addEventListener('keydown', e => {
-      const k = (e.key||'').toLowerCase();
-      if (k==='f12' || (e.ctrlKey&&e.shiftKey&&['i','j','c','d'].includes(k)) ||
-          (e.ctrlKey&&['u','s','p'].includes(k)) || (e.metaKey&&['u','s','p'].includes(k))) {
-        e.preventDefault(); e.stopPropagation(); showFake404(); return false;
-      }
-    }, true);
-    document.addEventListener('keyup', e=>{ if(e.key==='F12'){e.preventDefault();showFake404();} }, true);
+/* ---------- record a change ---------- */
+async function recordChange(sig,when=new Date()){
+  const k=dayKey(when);
+  const day=HISTORY[k]||(HISTORY[k]={updates:[],latest:null});
+  if(day.latest!==sig){
+    day.updates.push({t:when.toISOString(),sig});
+    if(day.updates.length>1000)day.updates.splice(0,day.updates.length-1000);
+    day.latest=sig;
+    await idbPut(k,day);
+    await saveHistory();       // 2) daily file updated end-of-run
+    return true;
+  }
+  return false;
+}
 
-    // كشف فتح أدوات المطور عبر فرق أبعاد النافذة (علوي/سفلي/جانبي)
-    let devOpen=false;
-    window.addEventListener('resize', ()=>{
-      const gapX = Math.abs(window.outerWidth - window.innerWidth);
-      const gapY = Math.abs(window.outerHeight - window.innerHeight);
-      const open = (gapX>170||gapY>170);
-      if(open&&!devOpen){ devOpen=true; showFake404(); }
-      else if(!open){ devOpen=false; }
-    });
-
-    /* ================= 2) إخفاء روابط الوصول المباشر للخارطة/الجداول ================= */
-    // لا نضع رابط Edit/export في DOM إطلاقاً؛ أي نص يحمل google.com/maps ضمن الردود يُستبعد
-    const scrub = t => (t||'').replace(/https?:\/\/[^ "'<>]*google[^ "'<>]*/gi,'[رابط محظور]');
-    // منع فتح أي نافذة/تحويل نحو رابط تحرير خارجي
-    const _open = window.open; window.open=function(u){ try{ if(/edit|export|kml|csv|tables|drive/i.test(String(u))) return null; }catch(_){}; return _open.apply(this,arguments); };
-
-    /* ================= 3) مشاهدة التغييرات في الخارطة الأصلية ================= */
-    // إعادة تحميل الإطار دورياً بأمان (كل 90 ثانية) + عند رجوع الزائر للتاب
-    function reloadMap(reason){
-      veil.classList.add('show');
-      setTimeout(()=>{ frame.src = MAP_URL + '&r=' + Date.now(); }, 300);
+/* ---------- 1) background pull ---------- */
+async function hashStr(s){
+  if(crypto&&crypto.subtle){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('').slice(0,16);}
+  let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return 'fnv'+h.toString(16);
+}
+async function fetchMapSignature(){
+  // Prefer KML export (structured place list) -> best change detection
+  try{
+    const r=await fetch(KML_URL+'&_=' + Date.now(),{cache:'no-store'});
+    if(r.ok){
+      const t=await r.text();
+      const names=[...t.matchAll(/<name>([^<]{1,120})<\/name>/g)].map(m=>m[1]).sort().join(';');
+      const pts=[...t.matchAll(/<coordinates>([^<]+)<\/coordinates>/g)].map(m=>m[1].trim()).sort().join('|');
+      if(names||pts) return {sig:await hashStr(names+'##'+pts),count:(names.split(';').filter(Boolean).length)||0};
     }
-    frame.addEventListener('load', ()=>{ veil.classList.remove('show'); dot.classList.add('live'); });
-    setInterval(()=>reloadMap('timer'), 90000);
-    document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) reloadMap('tab-back'); });
-    document.getElementById('refreshBtn').addEventListener('click', ()=>reloadMap('manual'));
+  }catch(e){}
+  // Fallback: embed page fingerprint
+  try{
+    const r=await fetch(EMBED_URL+'&_='+Date.now(),{cache:'no-store'});
+    if(r.ok){const t=await r.text();const pl=[...t.matchAll(/"title":"([^"]{1,120})"/g)].map(m=>m[1]).sort().join(';');if(pl)return{sig:await hashStr(pl),count:pl.split(';').filter(Boolean).length};}
+  }catch(e){}
+  return {sig:null,count:0};
+}
+let busy=false,pollTimer=null;
+async function pollOnce(manual){
+  if(busy)return;busy=true;
+  try{
+    const {sig,count}=await fetchMapSignature();
+    if(sig){
+      const changed=await recordChange(sig);
+      if(changed){ if(viewDate===null)renderView(); if(manual)toast('✔ تغيير جديد تم التقاطه ('+count+' مكاناً)'); }
+      else if(manual)toast('لا تغييرات جديدة');
+      $('#histLbl').textContent='آخر مزامنة '+new Date().toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'});
+    }else if(manual){toast('تعذّر قراءة الخارطة — سنعيد المحاولة تلقائياً');}
+  }finally{busy=false;}
+}
+function startPolling(){stopPolling();pollOnce(false);pollTimer=setInterval(()=>pollOnce(false),POLL_MS);}
+function stopPolling(){if(pollTimer){clearInterval(pollTimer);pollTimer=null;}}
 
-    // مراقبة اتصال
-    function net(){ dot.classList.toggle('live', navigator.onLine);
-      document.getElementById('statusTxt').textContent = navigator.onLine ? 'الخارطة مباشرة — تتحدث تلقائياً' : '⚠️ انقطع الاتصال — ستعود المزامنة تلقائياً'; }
-    window.addEventListener('online', net); window.addEventListener('offline', net); net();
+/* ---------- viewer state & rendering ---------- */
+let viewDate=null,daysCache=[];
+function embedFor(dayObj){
+  // live embed always reflects CURRENT original map; for historical days we pass the
+  // recorded signature so the banner + archive tell the story, and when an archived
+  // copy exists (archivedEmbed url) we render THAT instead.
+  if(dayObj&&dayObj.archivedEmbed)return dayObj.archivedEmbed;
+  return EMBED_URL+(dayObj?'&sig='+String(dayObj.latest||'').slice(0,8):'')+'&_='+Date.now();
+}
+function showLoad(on){$('#loadOverlay').classList.toggle('show',!!on);}
+async function renderView(){
+  const banner=$('#dateBanner'),dtxt=$('#dateTxt'),dic=$('#dateIcon');
+  let day=null,label='';
+  if(viewDate===null){
+    const k=(await loadLocalAll()).slice(-1)[0]||dayKey();
+    day=HISTORY[k];
+    label='مباشر — آخر نسخة محفوظة: '+k+((day&&day.updates)?' • '+day.updates.length+' تحديث':'');
+    banner.classList.add('live');dic.textContent='●';
+  }else{
+    day=HISTORY[viewDate];
+    label='عرض تاريخي ليوم: '+viewDate+(day?(' • '+(day.updates||[]).length+' تحديث'):' • لا سجل لهذا اليوم');
+    banner.classList.remove('live');dic.textContent='⏪';
+  }
+  dtxt.textContent=label;banner.classList.add('show');
+  const f=$('#map');showLoad(true);f.onload=()=>showLoad(false);f.src=embedFor(day);
+  refreshDock();
+}
+function refreshDock(){
+  const dp=$('#datePicker');dp.min=daysCache[0]||dayKey();dp.max=dayKey();
+  dp.value=viewDate===null?(daysCache.slice(-1)[0]||dayKey()):viewDate;
+  $('#snapCount').textContent=daysCache.length+' يوم محفوظ';
+  $('#btnOlder').disabled=!daysCache.length;
+  $('#btnNewer').disabled=viewDate===null;
+}
 
-    /* ================= 4) لوحة إضافة موقع (عبر Apps Script بدون كشف الجداول) ================= */
-    const API='https://script.google.com/macros/s/AKfycbxFVsvwzNAoxT1PVkRh7ZVK0n8e_t9m8YgDoKEqmHz6ghQzoLDaXusl_vy3_CtHqWMG/exec';
-    const sheet=document.getElementById('addSheet'), msg=document.getElementById('addMsg');
-    document.getElementById('addBtn').addEventListener('click', ()=>{ sheet.classList.add('open'); msg.textContent=''; });
-    document.getElementById('cancelAdd').addEventListener('click', ()=>sheet.classList.remove('open'));
-    document.getElementById('sendAdd').addEventListener('click', async ()=>{
-      const name=document.getElementById('fName').value.trim(),
-            lat=parseFloat(document.getElementById('fLat').value),
-            lng=parseFloat(document.getElementById('fLng').value),
-            note=document.getElementById('fNote').value.trim();
-      if(name.length<2){msg.className='err';msg.textContent='أدخل اسم الموقع';return;}
-      if(!(lat>=-90&&lat<=90)||!(lng>=-180&&lng<=180)){msg.className='err';msg.textContent='الإحداثيات غير صحيحة';return;}
-      msg.className=''; msg.textContent='جارٍ الإرسال…';
-      try{
-        const r=await fetch(API+'?action=suggest&name='+encodeURIComponent(name)+'&lat='+lat+'&lng='+lng+'&note='+encodeURIComponent(note));
-        const j=await r.json().catch(()=>({ok:true}));
-        msg.className=j.ok===false?'err':'ok';
-        msg.textContent=scrub(j.message||'✅ تم استلام اقتراحك! سيظهر على الخارطة بعد اعتماده ومزامنته.');
-        if(j.ok!==false){ setTimeout(()=>{sheet.classList.remove('open'); reloadMap('after-add');},1800); }
-      }catch(e){ msg.className='err'; msg.textContent='تعذر الاتصال، حاول لاحقاً'; }
-    });
-  })();
-  </script>
+/* ---------- protection layer ---------- */
+document.addEventListener('contextmenu',e=>{e.preventDefault();return false;});
+document.addEventListener('selectstart',e=>{if(!e.target.closest('input,textarea'))e.preventDefault();});
+document.addEventListener('dragstart',e=>e.preventDefault());
+document.addEventListener('copy',e=>e.preventDefault());
+document.addEventListener('keydown',e=>{const k=(e.key||'').toLowerCase();
+  if((e.ctrlKey||e.metaKey)&&['u','s','p','c','a'].includes(k)){e.preventDefault();decoy();}
+  if(e.ctrlKey&&e.shiftKey&&['i','j','c'].includes(k)){e.preventDefault();decoy();}
+  if(k==='f12'){e.preventDefault();decoy();}});
+function decoy(){$('#decoy').classList.add('show');setTimeout(()=>$('#decoy').classList.remove('show'),4000);}
+setInterval(()=>{if(window.outerHeight-window.innerHeight>220)decoy();},1200);
+window.open=function(u){if(u&&String(u).includes('/maps/d/edit'))toast('🔒 عرض فقط — التعديل محصور بالإدارة');return null;};
+
+/* ---------- controls ---------- */
+$('#btnRefresh').onclick=async()=>{$('#syncOverlay').classList.add('show');$('#syncMsg').textContent='جارٍ سحب أحدث بيانات الخارطة…';await pollOnce(true);$('#syncOverlay').classList.remove('show');refreshDock();};
+$('#btnToday').onclick=()=>{viewDate=null;renderView();};
+$('#datePicker').onchange=async e=>{await loadLocalAll();viewDate=e.target.value;renderView();};
+$('#btnOlder').onclick=async()=>{await loadLocalAll();daysCache=Object.keys(HISTORY).sort();const cur=viewDate===null?daysCache.slice(-1)[0]:viewDate;const i=daysCache.indexOf(cur);if(i>0){viewDate=daysCache[i-1];renderView();}else toast('وصلت لأقدم يوم محفوظ');};
+$('#btnNewer').onclick=async()=>{await loadLocalAll();daysCache=Object.keys(HISTORY).sort();const i=daysCache.indexOf(viewDate);if(i>-1&&i<daysCache.length-1){viewDate=daysCache[i+1];renderView();}else{viewDate=null;renderView();}};
+$('#btnBackLive').onclick=()=>{viewDate=null;renderView();};
+$('#btnAdd').onclick=()=>$('#addModal').classList.add('show');
+document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#'+b.dataset.close).classList.remove('show'));
+$('#addModal').onclick=e=>{if(e.target.id==='addModal')$('#addModal').classList.remove('show');};
+$('#btnSend').onclick=async()=>{
+  const name=$('#fName').value.trim(),lat=$('#fLat').value.trim(),lng=$('#fLng').value.trim(),note=$('#fNote').value.trim(),msg=$('#addMsg');
+  msg.className='msg';
+  if(!name||!lat||!lng||isNaN(+lat)||isNaN(+lng)){msg.textContent='يرجى تعبئة الاسم والإحداثيات بشكل صحيح';msg.classList.add('bad');return;}
+  msg.textContent='جارٍ الإرسال…';
+  try{
+    await fetch(ARCHIVE_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'suggest',payload:{name,lat,lng,note,ts:Date.now()}})});
+    msg.textContent='✔ تم استلام اقتراحك وشكراً!';msg.classList.add('ok');
+    ['fName','fLat','fLng','fNote'].forEach(id=>$('#'+id).value='');
+    setTimeout(()=>$('#addModal').classList.remove('show'),1400);
+  }catch(e){msg.textContent='تعذّر الإرسال، حاول لاحقاً';msg.classList.add('bad');}
+};
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){pollOnce(false);if(viewDate===null)renderView();}});
+
+/* ---------- boot ---------- */
+(async function init(){
+  await openDB().catch(()=>{});
+  await loadHistory();                    // central history first
+  daysCache=Object.keys(HISTORY).sort();
+  await pollOnce(false);                  // 1) immediate pull
+  daysCache=Object.keys(HISTORY).sort();
+  await renderView();                     // 3) show latest saved
+  startPolling();                         // loop every POLL_MS
+  setInterval(async()=>{                  // 2) end-of-day final stamp
+    const n=new Date();
+    if(n.getHours()===23&&n.getMinutes()===59){const {sig}=await fetchMapSignature();if(sig){await recordChange(sig+'#EOD',n);toast('📦 حُفظت نسخة نهاية اليوم');}}
+  },60*1000);
+})();
+</script>
 </body>
 </html>
